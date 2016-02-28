@@ -69,7 +69,10 @@ THE SOFTWARE.
 				android:orientation="horizontal">
 					<include layout="@layout/controls" />
 			</LinearLayout>
-			<View android:background="#ff00ff00" android:layout_width="fill_parent" android:layout_height="0dip" />
+			<fragment class="ch.blinkenlights.android.vanilla.ShowQueueFragment"
+				android:id="@+id/queue"
+				android:background="?overlay_background_color"
+				android:layout_width="fill_parent" android:layout_height="0dp" />
 	</ch.blinkenlights.android.vanilla.SlidingView>
 
 
