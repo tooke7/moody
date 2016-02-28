@@ -21,7 +21,6 @@ import android.content.Context;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
-import android.app.ActionBar;
 import android.view.View.OnTouchListener;
 import android.view.MotionEvent;
 import android.widget.FrameLayout;
@@ -32,16 +31,6 @@ import android.util.Log;
 public class SlidingView extends FrameLayout
 	implements View.OnTouchListener
 	{
-
-	/**
-	 * The height of the always visible (draggable)
-	 * area
-	 */
-	private int mDraggerHeightPx = 0;
-	/**
-	 * The size used by the fully expanded view
-	 */
-	private int mExpandedHeightPx = 600;
 	/**
 	 * Our current offset
 	 */
@@ -125,18 +114,10 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 			topOffset += childHeight;
 		}
 
-		if (lastChild != null && mDraggerHeightPx == 0) {
-			mDraggerHeightPx = topOffset;
-			mExpandedHeightPx = getUseablePx();
-
-			FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) lastChild.getLayoutParams();
-			params.height = mExpandedHeightPx - mDraggerHeightPx;
-			lastChild.setLayoutParams(params);
-
-			mMaxOffsetY =  params.height - mDraggerHeightPx;
+		if (lastChild != null && mMaxOffsetY == 0) {
+			mMaxOffsetY = lastChild.getHeight();
 			mViewOffsetY = mMaxOffsetY;
 			setTranslationY(mViewOffsetY);
-Log.v("VanillaMusic", "Initial layout: drag height = "+mDraggerHeightPx);
 		}
 	}
 
@@ -193,12 +174,5 @@ Log.v("VanillaMusic", "Initial layout: drag height = "+mDraggerHeightPx);
 		return true;
 	}
 
-	/**
-	 * Returns how many pixels we should use at most in expanded state
-	 */
-	private int getUseablePx() {
-		View root = getRootView();
-		return root.getHeight() - 256; // fixme: this needs to be smarter
-	}
 
 }
