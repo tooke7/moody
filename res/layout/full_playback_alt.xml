@@ -139,14 +139,23 @@ THE SOFTWARE.
 				android:layout_gravity="center" />
 		</LinearLayout>
 	</TableLayout>
-	<LinearLayout
+
+
+	<ch.blinkenlights.android.vanilla.SlidingView
 		android:id="@+id/controls_bottom"
 		android:layout_height="wrap_content"
 		android:layout_width="fill_parent"
 		android:layout_gravity="bottom|left"
-		android:layout_margin="0dip"
-		android:background="?overlay_background_color"
 		android:orientation="horizontal">
-		<include layout="@layout/controls" />
-	</LinearLayout>
+			<LinearLayout
+				android:layout_height="wrap_content"
+				android:layout_width="fill_parent"
+				android:background="?overlay_background_color"
+				android:orientation="horizontal">
+					<include layout="@layout/controls" />
+			</LinearLayout>
+			<View android:background="#ff00ff00" android:layout_width="fill_parent" android:layout_height="0dip" />
+	</ch.blinkenlights.android.vanilla.SlidingView>
+
+
 </merge>
