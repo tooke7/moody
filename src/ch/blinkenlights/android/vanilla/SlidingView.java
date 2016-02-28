@@ -115,6 +115,17 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 		}
 
 		if (lastChild != null && mMaxOffsetY == 0) {
+			// Sizes are now fixed: Overwrite any (possible) FILL_PARENT or WRAP_CONTENT
+			// value with the measured size
+			for (int i = 0; i < childCount ; i++) {
+				View child = getChildAt(i);
+				FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)child.getLayoutParams();
+				params.height = child.getHeight();
+				params.width = child.getWidth();
+				child.setLayoutParams(params);
+			}
+
+			// Configure initial view offset
 			mMaxOffsetY = lastChild.getHeight();
 			mViewOffsetY = mMaxOffsetY;
 			setTranslationY(mViewOffsetY);
