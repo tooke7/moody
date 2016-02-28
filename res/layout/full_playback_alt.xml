@@ -143,7 +143,7 @@ THE SOFTWARE.
 
 	<ch.blinkenlights.android.vanilla.SlidingView
 		android:id="@+id/controls_bottom"
-		android:layout_height="wrap_content"
+		android:layout_height="fill_parent"
 		android:layout_width="fill_parent"
 		android:layout_gravity="bottom|left"
 		android:layout_marginTop="88dip"
