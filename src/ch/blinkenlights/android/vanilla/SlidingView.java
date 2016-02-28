@@ -131,17 +131,23 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 		switch(event.getActionMasked()) {
 			case MotionEvent.ACTION_UP : {
 //Log.v("VanillaMusic", "Progress was: "+mProgressPx);
-				// Dispatch event if we never scrolled
-				if (mDidScroll == false)
+				if (mDidScroll == false) { // Dispatch event if we never scrolled
 					v.onTouchEvent(event);
+				} else 	if(mViewOffsetY < (mMaxOffsetY/2)) {
+					this.animate().translationY(0);
+				} else {
+					this.animate().translationY(mMaxOffsetY);
+				}
 
-				mViewOffsetY = getTranslationY();
-				mProgressPx = 0;
-				mDidScroll = false;
 				break;
 			}
 			case MotionEvent.ACTION_DOWN : {
 				v.onTouchEvent(event);
+
+				mViewOffsetY = getTranslationY();
+				mProgressPx = 0;
+				mDidScroll = false;
+
 				break;
 			}
 			case MotionEvent.ACTION_MOVE : {
