@@ -1777,7 +1777,7 @@ public final class PlaybackService extends Service
 	}
 
 	/**
-	 * Enqueues all the songs with the same album/artist/genre as passed
+	 * Enqueues all the songs with the same album/artist/genre as the passed
 	 * song.
 	 *
 	 * This will clear the queue and place the first song from the group after
