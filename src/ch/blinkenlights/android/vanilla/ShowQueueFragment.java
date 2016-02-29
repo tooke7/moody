@@ -20,11 +20,14 @@ package ch.blinkenlights.android.vanilla;
 import android.annotation.SuppressLint;
 import android.app.Fragment;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
-import android.widget.AdapterView;
+import android.view.ContextMenu;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import com.mobeta.android.dslv.DragSortListView;
 
 import android.util.Log;
@@ -33,7 +36,8 @@ public class ShowQueueFragment extends Fragment
 	implements TimelineCallback,
 	           AdapterView.OnItemClickListener,
 	           DragSortListView.DropListener,
-	           DragSortListView.RemoveListener
+	           DragSortListView.RemoveListener,
+	           MenuItem.OnMenuItemClickListener
 	{
 
 	private DragSortListView mListView;
@@ -55,6 +59,7 @@ public class ShowQueueFragment extends Fragment
 		mListView.setDropListener(this);
 		mListView.setRemoveListener(this);
 		mListView.setOnItemClickListener(this);
+		mListView.setOnCreateContextMenuListener(this);
 
 		PlaybackService.addTimelineCallback(this);
 		return view;
@@ -74,6 +79,65 @@ public class ShowQueueFragment extends Fragment
 		mService = PlaybackService.get(getActivity()); // fixme
 		refreshSongQueueList(true);
 	}
+
+
+	private final static int MENU_PLAY           = 100;
+	private final static int MENU_ENQUEUE_ALBUM  = 101;
+	private final static int MENU_ENQUEUE_ARTIST = 102;
+	private final static int MENU_ENQUEUE_GENRE  = 103;
+	private final static int MENU_REMOVE         = 104;
+
+	/**
+	 * Called by Android on long press. Builds the long press context menu.
+	 */
+	@Override
+	public void onCreateContextMenu(ContextMenu menu, View listView, ContextMenu.ContextMenuInfo absInfo) {
+		AdapterView.AdapterContextMenuInfo info = (AdapterView.AdapterContextMenuInfo)absInfo;
+		Intent intent = new Intent();
+		intent.putExtra("id", info.id);
+		intent.putExtra("position", info.position);
+		menu.add(0, MENU_PLAY, 0, R.string.play).setIntent(intent).setOnMenuItemClickListener(this);
+		menu.add(0, MENU_ENQUEUE_ALBUM, 0, R.string.enqueue_current_album).setIntent(intent).setOnMenuItemClickListener(this);
+		menu.add(0, MENU_ENQUEUE_ARTIST, 0, R.string.enqueue_current_artist).setIntent(intent).setOnMenuItemClickListener(this);
+		menu.add(0, MENU_ENQUEUE_GENRE, 0, R.string.enqueue_current_genre).setIntent(intent).setOnMenuItemClickListener(this);
+		menu.add(0, MENU_REMOVE, 0, R.string.remove).setIntent(intent).setOnMenuItemClickListener(this);
+	}
+
+	/**
+	 * Called by Android after the User selected a MenuItem.
+	 *
+	 * @param item The selected menu item.
+	 */
+	@Override
+	public boolean onMenuItemClick(MenuItem item) {
+		Intent intent = item.getIntent();
+		int itemId = item.getItemId();
+		int pos = intent.getIntExtra("position", -1);
+
+		Song song = mService.getSongByQueuePosition(pos);
+		switch (item.getItemId()) {
+			case MENU_PLAY:
+				onItemClick(null, null, pos, -1);
+				break;
+			case MENU_ENQUEUE_ALBUM:
+				mService.enqueueFromSong(song, MediaUtils.TYPE_ALBUM);
+				break;
+			case MENU_ENQUEUE_ARTIST:
+				mService.enqueueFromSong(song, MediaUtils.TYPE_ARTIST);
+				break;
+			case MENU_ENQUEUE_GENRE:
+				mService.enqueueFromSong(song, MediaUtils.TYPE_GENRE);
+				break;
+			case MENU_REMOVE:
+				remove(pos);
+				break;
+			default:
+				throw new IllegalArgumentException("Unhandled menu id received!");
+				// we could actually dispatch this to the hosting activity, but we do not need this for now.
+		}
+		return true;
+	}
+
 
 	/**
 	 * Fired from adapter listview  if user moved an item
