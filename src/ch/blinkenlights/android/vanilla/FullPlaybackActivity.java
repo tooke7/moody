@@ -389,13 +389,13 @@ public class FullPlaybackActivity extends PlaybackActivity
 			openLibrary(null);
 			break;
 		case MENU_ENQUEUE_ALBUM:
-			PlaybackService.get(this).enqueueFromCurrent(MediaUtils.TYPE_ALBUM);
+			PlaybackService.get(this).enqueueFromSong(PlaybackService.get(this).getSong(0), MediaUtils.TYPE_ALBUM);
 			break;
 		case MENU_ENQUEUE_ARTIST:
-			PlaybackService.get(this).enqueueFromCurrent(MediaUtils.TYPE_ARTIST);
+			PlaybackService.get(this).enqueueFromSong(PlaybackService.get(this).getSong(0), MediaUtils.TYPE_ARTIST);
 			break;
 		case MENU_ENQUEUE_GENRE:
-			PlaybackService.get(this).enqueueFromCurrent(MediaUtils.TYPE_GENRE);
+			PlaybackService.get(this).enqueueFromSong(PlaybackService.get(this).getSong(0), MediaUtils.TYPE_GENRE);
 			break;
 		case MENU_SONG_FAVORITE:
 			Song song = (PlaybackService.get(this)).getSong(0);
