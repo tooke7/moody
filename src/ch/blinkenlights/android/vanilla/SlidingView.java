@@ -19,6 +19,8 @@ package ch.blinkenlights.android.vanilla;
 
 import android.content.Context;
 import android.util.AttributeSet;
+import android.view.animation.DecelerateInterpolator;
+import android.view.GestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.View.OnTouchListener;
@@ -32,6 +34,10 @@ public class SlidingView extends FrameLayout
 	implements View.OnTouchListener
 	{
 	/**
+	 * Ignore drag until we made 30 px progress.
+	 */
+	private final float MAX_PROGRESS = 30;
+	/**
 	 * Our current offset
 	 */
 	private float mViewOffsetY = 0;
@@ -40,12 +46,25 @@ public class SlidingView extends FrameLayout
 	 */
 	private float mMaxOffsetY = 0;
 	/**
-	 *
+	 * The previous Y coordinate, used to calculate the movement diff.
 	 */
 	private float mPreviousY = 0;
+	/**
+	 * The total progress in pixels of this drag
+	 */
 	private float mProgressPx = 0;
+	/**
+	 * Signals the direction of the fling
+	 */
+	private int mFlingDirection = 0;
+	/**
+	 * TRUE if we started to move this view
+	 */
 	private boolean mDidScroll = false;
-	private final float MAX_PROGRESS = 30;
+	/**
+	 * Reference to the gesture detector
+	 */
+	private GestureDetector mDetector;
 
 
 	public SlidingView(Context context) {
@@ -58,6 +77,20 @@ public class SlidingView extends FrameLayout
 
 	public SlidingView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
+	}
+
+	/**
+	 * Fully expands the slide
+	 */
+	public void expandSlide() {
+		this.animate().translationY(0).setInterpolator(new DecelerateInterpolator());
+	}
+
+	/**
+	 * Hides the slide
+	 */
+	public void hideSlide() {
+		this.animate().translationY(mMaxOffsetY).setInterpolator(new DecelerateInterpolator());
 	}
 
 	/**
@@ -82,6 +115,7 @@ public class SlidingView extends FrameLayout
 				break;
 			}
 		}
+		mDetector = new GestureDetector(new GestureListener());
 	}
 
 
@@ -135,21 +169,27 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 
 	@Override
 	public boolean onTouch(View v, MotionEvent event){
+		// Fix up the event offset as we are moving the view itself.
+		// This is required to get flings correctly detected
+		event.setLocation(event.getRawX(), event.getRawY());
+
+		mDetector.onTouchEvent(event);
 		float y = event.getRawY();
 		float dy = y - mPreviousY;
 
-//Log.v("VanillaMusic", "DY: "+dy);
 		switch(event.getActionMasked()) {
 			case MotionEvent.ACTION_UP : {
-//Log.v("VanillaMusic", "Progress was: "+mProgressPx);
 				if (mDidScroll == false) { // Dispatch event if we never scrolled
 					v.onTouchEvent(event);
-				} else 	if(mViewOffsetY < (mMaxOffsetY/2)) {
-					this.animate().translationY(0);
+				} else if (mFlingDirection < 0) {
+					expandSlide();
+				} else if (mFlingDirection > 0) {
+					hideSlide();
+				} else if (mViewOffsetY < (mMaxOffsetY/2)) {
+					expandSlide();
 				} else {
-					this.animate().translationY(mMaxOffsetY);
+					hideSlide();
 				}
-
 				break;
 			}
 			case MotionEvent.ACTION_DOWN : {
@@ -157,8 +197,8 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 
 				mViewOffsetY = getTranslationY();
 				mProgressPx = 0;
+				mFlingDirection = 0;
 				mDidScroll = false;
-
 				break;
 			}
 			case MotionEvent.ACTION_MOVE : {
@@ -183,12 +223,19 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 				}
 
 				setTranslationY(usedY);
-//Log.v("VanillaMusic", "Setting it to "+usedY);
 				break;
 			}
 		}
 		mPreviousY = y;
 		return true;
+	}
+
+	class GestureListener extends GestureDetector.SimpleOnGestureListener {
+		@Override
+		public boolean onFling(MotionEvent event1, MotionEvent event2,  float velocityX, float velocityY) {
+			mFlingDirection = (velocityY > 0 ? 1 : -1);
+			return true;
+		}
 	}
 
 
