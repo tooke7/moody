@@ -96,6 +96,13 @@ public class SlidingView extends FrameLayout
 	}
 
 	/**
+	 * Returns true if the slide is currently fully expanded
+	 */
+	public boolean isExpanded() {
+		return (getTranslationY() == 0 ? true : false);
+	}
+
+	/**
 	 * Called after the view was inflated, binds an onTouchListener to all child
 	 * elements of the child view
 	 */
