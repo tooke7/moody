@@ -77,6 +77,8 @@ public class SlidingView extends FrameLayout
 
 	public SlidingView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
+		setBackgroundColor(ThemeHelper.getDefaultCoverColors(context)[0]);
+		mDetector = new GestureDetector(new GestureListener());
 	}
 
 	/**
@@ -115,7 +117,6 @@ public class SlidingView extends FrameLayout
 				break;
 			}
 		}
-		mDetector = new GestureDetector(new GestureListener());
 	}
 
 

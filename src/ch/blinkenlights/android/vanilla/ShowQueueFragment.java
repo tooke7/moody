@@ -51,8 +51,6 @@ public class ShowQueueFragment extends Fragment
 		View view = inflater.inflate(R.layout.showqueue_listview, container, false);
 		Context context = getActivity();
 
-		view.setBackgroundColor(ThemeHelper.getDefaultCoverColors(getActivity())[0]);
-
 		mListView    = (DragSortListView) view.findViewById(R.id.list);
 		mListAdapter = new ShowQueueAdapter(context, R.layout.draggable_row);
 		mListView.setAdapter(mListAdapter);
