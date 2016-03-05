@@ -94,6 +94,9 @@ public class ShowQueueFragment extends Fragment
 		Intent intent = new Intent();
 		intent.putExtra("id", info.id);
 		intent.putExtra("position", info.position);
+		Song song = mService.getSongByQueuePosition(info.position);
+
+		menu.setHeaderTitle(song.title);
 		menu.add(0, MENU_PLAY, 0, R.string.play).setIntent(intent).setOnMenuItemClickListener(this);
 		menu.add(0, MENU_ENQUEUE_ALBUM, 0, R.string.enqueue_current_album).setIntent(intent).setOnMenuItemClickListener(this);
 		menu.add(0, MENU_ENQUEUE_ARTIST, 0, R.string.enqueue_current_artist).setIntent(intent).setOnMenuItemClickListener(this);
