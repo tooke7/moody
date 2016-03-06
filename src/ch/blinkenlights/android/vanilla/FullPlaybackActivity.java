@@ -64,7 +64,7 @@ public class FullPlaybackActivity extends PlaybackActivity
 
 	private TextView mOverlayText;
 	private View mControlsTop;
-	private View mControlsBottom;
+	private View mSlidingView;
 
 	private SeekBar mSeekBar;
 	private TableLayout mInfoTable;
@@ -161,7 +161,7 @@ public class FullPlaybackActivity extends PlaybackActivity
 		coverView.setOnLongClickListener(this);
 		mCoverView = coverView;
 
-		mControlsBottom = findViewById(R.id.controls_bottom);
+		mSlidingView = findViewById(R.id.sliding_view);
 		View previousButton = findViewById(R.id.previous);
 		previousButton.setOnClickListener(this);
 		mPlayPauseButton = (ImageButton)findViewById(R.id.play_pause);
@@ -513,7 +513,7 @@ public class FullPlaybackActivity extends PlaybackActivity
 	{
 		int mode = visible ? View.VISIBLE : View.GONE;
 		mControlsTop.setVisibility(mode);
-		mControlsBottom.setVisibility(mode);
+		mSlidingView.setVisibility(mode);
 		mControlsVisible = visible;
 
 		if (visible) {

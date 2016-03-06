@@ -143,7 +143,7 @@ THE SOFTWARE.
 
 
 	<ch.blinkenlights.android.vanilla.SlidingView
-		android:id="@+id/controls_bottom"
+		android:id="@+id/sliding_view"
 		android:layout_height="fill_parent"
 		android:layout_width="fill_parent"
 		android:layout_gravity="bottom|left"
@@ -160,7 +160,6 @@ THE SOFTWARE.
 			</LinearLayout>
 			<fragment class="ch.blinkenlights.android.vanilla.ShowQueueFragment"
 				android:id="@+id/queue"
-				android:background="?overlay_background_color"
 				android:layout_width="fill_parent" android:layout_height="fill_parent" />
 	</ch.blinkenlights.android.vanilla.SlidingView>
 
