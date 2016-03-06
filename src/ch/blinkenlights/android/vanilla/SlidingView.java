@@ -29,6 +29,7 @@ import android.view.View.OnTouchListener;
 import android.view.MotionEvent;
 import android.widget.FrameLayout;
 
+import java.util.ArrayList;
 import android.util.Log;
 
 
@@ -75,6 +76,14 @@ public class SlidingView extends FrameLayout
 	 * The resource id to listen for touch events
 	 */
 	private int mSliderHandleId = 0;
+	/**
+	 * The current expansion stage
+	 */
+	int mCurrentStage = 0;
+	/**
+	 * List with all possible stages and their offsets
+	 */
+	ArrayList<Integer> mStages = new ArrayList<Integer>();
 
 
 	public SlidingView(Context context) {
@@ -104,14 +113,42 @@ public class SlidingView extends FrameLayout
 	 * Fully expands the slide
 	 */
 	public void expandSlide() {
-		this.animate().translationY(0).setInterpolator(new DecelerateInterpolator());
+		jumpToStage(mCurrentStage + 1);
 	}
 
 	/**
 	 * Hides the slide
 	 */
 	public void hideSlide() {
-		this.animate().translationY(mMaxOffsetY).setInterpolator(new DecelerateInterpolator());
+		jumpToStage(mCurrentStage - 1);
+	}
+
+	/**
+	 * Transforms to the new expansion state
+	 *
+	 * @param stage the stage to transform to
+	 */
+	private void jumpToStage(int stage) {
+		if (stage >= mStages.size())
+			stage = mStages.size() - 1;
+		if (stage < 0)
+			stage = 0;
+
+		Log.v("VanillaMusic", "Transforming to stage "+stage+" -> "+mStages.get(stage));
+		int pxOff = mStages.get(stage);
+		this.animate().translationY(pxOff).setInterpolator(new DecelerateInterpolator());
+		mCurrentStage = stage;
+
+		if (mSlaveView != null) {
+			int totalOffset = 0;
+			for (int i = 0; i <= mCurrentStage; i++) {
+				totalOffset += getChildAt(i).getHeight();
+			}
+			FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)mSlaveView.getLayoutParams();
+			Log.v("VanillaMusic", "Margin was: "+totalOffset);
+			params.bottomMargin = totalOffset;
+			mSlaveView.setLayoutParams(params);
+		}
 	}
 
 	/**
@@ -156,6 +193,8 @@ public class SlidingView extends FrameLayout
 		int topOffset = 0;
 		View lastChild = null;
 
+		mStages.clear();
+
 		for (int i = 0; i < childCount ; i++) {
 			lastChild = getChildAt(i);
 			int childWidth = lastChild.getMeasuredWidth();
@@ -170,12 +209,14 @@ public class SlidingView extends FrameLayout
 
 Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom);
 			lastChild.layout(0, topOffset, childWidth, childBottom);
+			mStages.add(viewHeight - childBottom);
 			topOffset += childHeight;
 		}
 
 		if (lastChild != null && mMaxOffsetY == 0) {
 			// Sizes are now fixed: Overwrite any (possible) FILL_PARENT or WRAP_CONTENT
 			// value with the measured size
+			// This should only happen on the first run (mMaxOffsetY == 0)
 			for (int i = 0; i < childCount ; i++) {
 				View child = getChildAt(i);
 				FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)child.getLayoutParams();
@@ -186,18 +227,12 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 		}
 
 		if (changed) {
-			mMaxOffsetY = viewHeight - getChildAt(0).getHeight();
+			mMaxOffsetY = mStages.get(0);
 			mViewOffsetY = mMaxOffsetY;
+			Log.v("VanillaMusic", "Set to: "+mViewOffsetY);
 			setTranslationY(mViewOffsetY);
+			jumpToStage(0);
 		}
-
-		if (mSlaveView != null) {
-			FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)mSlaveView.getLayoutParams();
-			Log.v("VanillaMusic", "Margin was: "+params.bottomMargin);
-			params.bottomMargin = getChildAt(0).getHeight();
-			mSlaveView.setLayoutParams(params);
-		}
-
 	}
 
 

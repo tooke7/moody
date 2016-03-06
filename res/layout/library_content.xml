@@ -67,6 +67,14 @@ THE SOFTWARE.
 				android:orientation="horizontal">
 				<include layout="@layout/bottombar_controls" android:id="@+id/bottombar_controls" />
 			</LinearLayout>
+			<LinearLayout
+				android:layout_height="wrap_content"
+				android:layout_width="fill_parent"
+				android:background="?overlay_background_color"
+				android:orientation="horizontal">
+					<include layout="@layout/controls" />
+			</LinearLayout>
+
 			<fragment class="ch.blinkenlights.android.vanilla.ShowQueueFragment"
 				android:id="@+id/queue"
 				android:layout_width="fill_parent" android:layout_height="fill_parent" />
