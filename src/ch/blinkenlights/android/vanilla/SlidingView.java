@@ -17,6 +17,7 @@
 
 package ch.blinkenlights.android.vanilla;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.util.AttributeSet;
@@ -67,6 +68,10 @@ public class SlidingView extends FrameLayout
 	 */
 	private GestureDetector mDetector;
 	/**
+	 * An external View we are managing during layout changes.
+	 */
+	private View mSlaveView;
+	/**
 	 * The resource id to listen for touch events
 	 */
 	private int mSliderHandleId = 0;
@@ -83,10 +88,16 @@ public class SlidingView extends FrameLayout
 	public SlidingView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
 		setBackgroundColor(ThemeHelper.getDefaultCoverColors(context)[0]);
+
 		mDetector = new GestureDetector(new GestureListener());
 		TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.SlidingViewPreferences);
 		mSliderHandleId = a.getResourceId(R.styleable.SlidingViewPreferences_slider_handle_id, 0);
+		int slaveId = a.getResourceId(R.styleable.SlidingViewPreferences_slider_slave_id, 0);
 		a.recycle();
+
+		// This is probably a parent view: so we need the context but can search
+		// it before we got inflated:
+		mSlaveView = ((Activity)context).findViewById(slaveId);
 	}
 
 	/**
@@ -119,6 +130,7 @@ public class SlidingView extends FrameLayout
 		super.onFinishInflate();
 
 		View handle = findViewById(mSliderHandleId);
+
 		if (handle != null) {
 			if (handle instanceof ViewGroup) {
 				ViewGroup group = (ViewGroup)handle;
@@ -171,12 +183,21 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 				params.width = child.getWidth();
 				child.setLayoutParams(params);
 			}
+		}
 
-			// Configure initial view offset
-			mMaxOffsetY = lastChild.getHeight();
+		if (changed) {
+			mMaxOffsetY = viewHeight - getChildAt(0).getHeight();
 			mViewOffsetY = mMaxOffsetY;
 			setTranslationY(mViewOffsetY);
 		}
+
+		if (mSlaveView != null) {
+			FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)mSlaveView.getLayoutParams();
+			Log.v("VanillaMusic", "Margin was: "+params.bottomMargin);
+			params.bottomMargin = getChildAt(0).getHeight();
+			mSlaveView.setLayoutParams(params);
+		}
+
 	}
 
 

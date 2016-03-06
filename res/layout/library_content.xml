@@ -57,8 +57,9 @@ THE SOFTWARE.
 		android:layout_width="fill_parent"
 		android:layout_height="fill_parent"
 		android:layout_gravity="bottom|left"
+		android:orientation="horizontal"
 		vanilla:slider_handle_id="@+id/bottombar_controls"
-		android:orientation="horizontal">
+		vanilla:slider_slave_id="@+id/content">
 			<LinearLayout
 				android:layout_height="wrap_content"
 				android:layout_width="fill_parent"
