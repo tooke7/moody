@@ -73,9 +73,13 @@ public class ShowQueueFragment extends Fragment
 	@Override
 	public void onResume() {
 		super.onResume();
-		
-		mService = PlaybackService.get(getActivity()); // fixme
-		refreshSongQueueList(true);
+
+		// Check if playback service has already been created
+		if (mService == null && PlaybackService.hasInstance())
+			mService = PlaybackService.get(getActivity());
+
+		if (mService != null)
+			refreshSongQueueList(true);
 	}
 
 
@@ -210,7 +214,8 @@ public class ShowQueueFragment extends Fragment
 
 	// Used Callbacks of TImelineCallback
 	public void onTimelineChanged() {
-		Log.v("VanillaMusic", "The timeline has been changed!");
+		if (mService == null)
+			mService = PlaybackService.get(getActivity());
 		refreshSongQueueList(false);
 	}
 
