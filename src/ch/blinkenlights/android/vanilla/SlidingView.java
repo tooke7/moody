@@ -18,6 +18,7 @@
 package ch.blinkenlights.android.vanilla;
 
 import android.content.Context;
+import android.content.res.TypedArray;
 import android.util.AttributeSet;
 import android.view.animation.DecelerateInterpolator;
 import android.view.GestureDetector;
@@ -65,6 +66,10 @@ public class SlidingView extends FrameLayout
 	 * Reference to the gesture detector
 	 */
 	private GestureDetector mDetector;
+	/**
+	 * The resource id to listen for touch events
+	 */
+	private int mSliderHandleId = 0;
 
 
 	public SlidingView(Context context) {
@@ -79,6 +84,9 @@ public class SlidingView extends FrameLayout
 		super(context, attrs, defStyle);
 		setBackgroundColor(ThemeHelper.getDefaultCoverColors(context)[0]);
 		mDetector = new GestureDetector(new GestureListener());
+		TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.SlidingViewPreferences);
+		mSliderHandleId = a.getResourceId(R.styleable.SlidingViewPreferences_slider_handle_id, 0);
+		a.recycle();
 	}
 
 	/**
@@ -110,18 +118,15 @@ public class SlidingView extends FrameLayout
 	protected void onFinishInflate() {
 		super.onFinishInflate();
 
-		int childCount = getChildCount();
-		for (int i=0; i < childCount; i++) {
-			View child = getChildAt(i);
-			if (child instanceof ViewGroup) {
-				ViewGroup group = (ViewGroup)child;
-				int gchildren = group.getChildCount();
-				for (int g = 0; g < gchildren ; g++) {
-					group.getChildAt(g).setOnTouchListener(this);
-					Log.v("VanillaMusic", "Bound listener to child at "+ group.getChildAt(g));
+		View handle = findViewById(mSliderHandleId);
+		if (handle != null) {
+			if (handle instanceof ViewGroup) {
+				ViewGroup group = (ViewGroup)handle;
+				for (int i = 0; i < group.getChildCount(); i++) {
+					group.getChildAt(i).setOnTouchListener(this);
 				}
-				// We bound to all children of our first child
-				break;
+			} else {
+				handle.setOnTouchListener(this);
 			}
 		}
 	}
