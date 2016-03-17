@@ -111,16 +111,14 @@ public class SlidingView extends FrameLayout
 	 * Fully expands the slide
 	 */
 	public void expandSlide() {
-		int stage = (mCurrentStage < mStages.size()-1 ? mCurrentStage + 1 : mCurrentStage);
-		setExpansionStage(stage);
+		setExpansionStage(mStages.size()-1);
 	}
 
 	/**
 	 * Hides the slide
 	 */
 	public void hideSlide() {
-		int stage = (mCurrentStage > 0 ? mCurrentStage - 1 : 0);
-		setExpansionStage(stage);
+		setExpansionStage(0);
 	}
 
 	/**
@@ -243,22 +241,27 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 
 		mDetector.onTouchEvent(event);
 		float y = event.getRawY();
-		float dy = y - mPreviousY;
+		float dy = y - mPreviousY;    // diff Y
+		float vy = getTranslationY(); // view Y
 
 		switch(event.getActionMasked()) {
 			case MotionEvent.ACTION_UP : {
 				if (mDidScroll == false) { // Dispatch event if we never scrolled
 					v.onTouchEvent(event);
-				}
-				/* else if (mFlingDirection < 0) {
-					expandSlide();
-				} else if (mFlingDirection > 0) {
-					hideSlide();
-				} else if (mViewOffsetY < (mMaxOffsetY/2)) {
-					expandSlide();
 				} else {
-					hideSlide();
-				}*/
+					int nstages = mStages.size();
+					int tstage = 0;
+					int tbonus = (int)mProgressPx * mFlingDirection; // we add the progress as virtual bonus on fling
+					int toff = (int)mMaxOffsetY;
+					for (int i=0; i<nstages; i++) {
+						int tdiff = Math.abs((int)vy + tbonus - mStages.get(i));
+						if (tdiff < toff) {
+							toff = tdiff;
+							tstage = i;
+						}
+					}
+					setExpansionStage(tstage);
+				}
 				break;
 			}
 			case MotionEvent.ACTION_DOWN : {
@@ -271,7 +274,7 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 			}
 			case MotionEvent.ACTION_MOVE : {
 				mProgressPx += Math.abs(dy);
-				float usedY = getTranslationY() + dy;
+				float usedY = vy + dy;
 
 				if (usedY < 0)
 					usedY = 0;
@@ -280,7 +283,7 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 
 				if (mProgressPx < MAX_PROGRESS) {
 					// we did not reach a minimum of progress: do not scroll yet
-					usedY = getTranslationY();
+					usedY = vy;
 				} else if (mDidScroll == false) {
 					mDidScroll = true;
 					event.setAction(MotionEvent.ACTION_CANCEL);
