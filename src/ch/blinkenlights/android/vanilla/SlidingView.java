@@ -43,10 +43,6 @@ public class SlidingView extends FrameLayout
 	 */
 	private final float MAX_PROGRESS = 30;
 	/**
-	 * Our current offset
-	 */
-	private float mViewOffsetY = 0;
-	/**
 	 * The maximum (initial) offset of the view
 	 */
 	private float mMaxOffsetY = 0;
@@ -232,9 +228,8 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 
 		if (changed) {
 			mMaxOffsetY = mStages.get(0);
-			mViewOffsetY = mMaxOffsetY;
-			Log.v("VanillaMusic", "Set to: "+mViewOffsetY);
-			setTranslationY(mViewOffsetY);
+			Log.v("VanillaMusic", "Set to: "+mMaxOffsetY);
+			setTranslationY(mMaxOffsetY);
 			setExpansionStage(0);
 		}
 	}
@@ -254,7 +249,8 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 			case MotionEvent.ACTION_UP : {
 				if (mDidScroll == false) { // Dispatch event if we never scrolled
 					v.onTouchEvent(event);
-				} else if (mFlingDirection < 0) {
+				}
+				/* else if (mFlingDirection < 0) {
 					expandSlide();
 				} else if (mFlingDirection > 0) {
 					hideSlide();
@@ -262,23 +258,21 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 					expandSlide();
 				} else {
 					hideSlide();
-				}
+				}*/
 				break;
 			}
 			case MotionEvent.ACTION_DOWN : {
 				v.onTouchEvent(event);
 
-				mViewOffsetY = getTranslationY();
 				mProgressPx = 0;
 				mFlingDirection = 0;
 				mDidScroll = false;
 				break;
 			}
 			case MotionEvent.ACTION_MOVE : {
-				mViewOffsetY += dy;
 				mProgressPx += Math.abs(dy);
+				float usedY = getTranslationY() + dy;
 
-				float usedY = mViewOffsetY;
 				if (usedY < 0)
 					usedY = 0;
 				if (usedY > mMaxOffsetY)
