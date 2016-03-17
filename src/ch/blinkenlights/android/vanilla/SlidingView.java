@@ -18,6 +18,8 @@
 package ch.blinkenlights.android.vanilla;
 
 import android.app.Activity;
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.util.AttributeSet;
@@ -113,14 +115,16 @@ public class SlidingView extends FrameLayout
 	 * Fully expands the slide
 	 */
 	public void expandSlide() {
-		jumpToStage(mCurrentStage + 1);
+		int stage = (mCurrentStage < mStages.size()-1 ? mCurrentStage + 1 : mCurrentStage);
+		setExpansionStage(stage);
 	}
 
 	/**
 	 * Hides the slide
 	 */
 	public void hideSlide() {
-		jumpToStage(mCurrentStage - 1);
+		int stage = (mCurrentStage > 0 ? mCurrentStage - 1 : 0);
+		setExpansionStage(stage);
 	}
 
 	/**
@@ -128,34 +132,34 @@ public class SlidingView extends FrameLayout
 	 *
 	 * @param stage the stage to transform to
 	 */
-	private void jumpToStage(int stage) {
-		if (stage >= mStages.size())
-			stage = mStages.size() - 1;
-		if (stage < 0)
-			stage = 0;
-
+	private void setExpansionStage(int stage) {
 		Log.v("VanillaMusic", "Transforming to stage "+stage+" -> "+mStages.get(stage));
-		int pxOff = mStages.get(stage);
-		this.animate().translationY(pxOff).setInterpolator(new DecelerateInterpolator());
 		mCurrentStage = stage;
-
-		if (mSlaveView != null) {
-			int totalOffset = 0;
-			for (int i = 0; i <= mCurrentStage; i++) {
-				totalOffset += getChildAt(i).getHeight();
-			}
-			FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)mSlaveView.getLayoutParams();
-			Log.v("VanillaMusic", "Margin was: "+totalOffset);
-			params.bottomMargin = totalOffset;
-			mSlaveView.setLayoutParams(params);
-		}
+		int pxOff = mStages.get(stage);
+		this
+			.animate()
+			.translationY(pxOff)
+			.setListener(new AnimationListener())
+			.setInterpolator(new DecelerateInterpolator());
 	}
 
 	/**
-	 * Returns true if the slide is currently fully expanded
+	 * Changes the parent view to fit given stage
+	 *
+	 * @param stage the stage to transform to
 	 */
-	public boolean isExpanded() {
-		return (getTranslationY() == 0 ? true : false);
+	private void setSlaveViewStage(int stage) {
+		if (mSlaveView == null)
+			return;
+
+		int totalOffset = 0;
+		for (int i = 0; i <= stage; i++) {
+			totalOffset += getChildAt(i).getHeight();
+		}
+		FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)mSlaveView.getLayoutParams();
+		Log.v("VanillaMusic", "Margin was: "+totalOffset);
+		params.bottomMargin = totalOffset;
+		mSlaveView.setLayoutParams(params);
 	}
 
 	/**
@@ -231,7 +235,7 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 			mViewOffsetY = mMaxOffsetY;
 			Log.v("VanillaMusic", "Set to: "+mViewOffsetY);
 			setTranslationY(mViewOffsetY);
-			jumpToStage(0);
+			setExpansionStage(0);
 		}
 	}
 
@@ -283,12 +287,11 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 				if (mProgressPx < MAX_PROGRESS) {
 					// we did not reach a minimum of progress: do not scroll yet
 					usedY = getTranslationY();
-				} else {
-					if (mDidScroll == false) {
-						event.setAction(MotionEvent.ACTION_CANCEL);
-						v.onTouchEvent(event);
-					}
+				} else if (mDidScroll == false) {
 					mDidScroll = true;
+					event.setAction(MotionEvent.ACTION_CANCEL);
+					v.onTouchEvent(event);
+					setSlaveViewStage(0); // parent can use full view, will be reset on ACTION_UP handlers
 				}
 
 				setTranslationY(usedY);
@@ -307,5 +310,15 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 		}
 	}
 
+	class AnimationListener extends AnimatorListenerAdapter {
+		@Override
+		public void onAnimationEnd(Animator animation) {
+			setSlaveViewStage(mCurrentStage);
+		}
+		@Override
+		public void onAnimationCancel(Animator animation) {
+			onAnimationEnd(animation);
+		}
+	}
 
 }
