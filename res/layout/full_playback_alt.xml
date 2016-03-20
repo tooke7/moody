@@ -160,7 +160,8 @@ THE SOFTWARE.
 			</LinearLayout>
 			<fragment class="ch.blinkenlights.android.vanilla.ShowQueueFragment"
 				android:id="@+id/queue"
-				android:layout_width="fill_parent" android:layout_height="fill_parent" />
+				android:layout_width="fill_parent"
+				android:layout_height="fill_parent" />
 	</ch.blinkenlights.android.vanilla.SlidingView>
 
 
