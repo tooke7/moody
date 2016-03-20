@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>. 
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 package ch.blinkenlights.android.vanilla;
@@ -32,8 +32,6 @@ import android.view.MotionEvent;
 import android.widget.FrameLayout;
 
 import java.util.ArrayList;
-import android.util.Log;
-
 
 public class SlidingView extends FrameLayout
 	implements View.OnTouchListener
@@ -127,7 +125,6 @@ public class SlidingView extends FrameLayout
 	 * @param stage the stage to transform to
 	 */
 	private void setExpansionStage(int stage) {
-		Log.v("VanillaMusic", "Transforming to stage "+stage+" -> "+mStages.get(stage));
 		mCurrentStage = stage;
 		int pxOff = mStages.get(stage);
 		this
@@ -151,7 +148,6 @@ public class SlidingView extends FrameLayout
 			totalOffset += getChildAt(i).getHeight();
 		}
 		FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)mSlaveView.getLayoutParams();
-		Log.v("VanillaMusic", "Margin was: "+totalOffset);
 		params.bottomMargin = totalOffset;
 		mSlaveView.setLayoutParams(params);
 	}
@@ -205,7 +201,6 @@ public class SlidingView extends FrameLayout
 			if (childBottom > viewHeight)
 				childBottom = viewHeight;
 
-Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom);
 			lastChild.layout(0, topOffset, childWidth, childBottom);
 			mStages.add(viewHeight - childBottom);
 			topOffset += childHeight;
@@ -226,7 +221,6 @@ Log.v("VanillaMusic", "Stacked child "+i+" at "+topOffset +" up to "+childBottom
 
 		if (changed) {
 			mMaxOffsetY = mStages.get(0);
-			Log.v("VanillaMusic", "Set to: "+mMaxOffsetY);
 			setTranslationY(mMaxOffsetY);
 			setExpansionStage(0);
 		}

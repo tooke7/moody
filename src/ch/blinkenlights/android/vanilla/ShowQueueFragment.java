@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>. 
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 package ch.blinkenlights.android.vanilla;
@@ -30,7 +30,6 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import com.mobeta.android.dslv.DragSortListView;
 
-import android.util.Log;
 
 public class ShowQueueFragment extends Fragment
 	implements TimelineCallback,
@@ -65,7 +64,6 @@ public class ShowQueueFragment extends Fragment
 
 	@Override
 	public void onDestroyView() {
-	Log.v("VanillaMusic", "Fragment destroy");
 		PlaybackService.removeTimelineCallback(this);
 		super.onDestroyView();
 	}
