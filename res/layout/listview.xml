@@ -20,11 +20,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 -->
-<ListView
+<ch.blinkenlights.android.vanilla.SaneListView
 	xmlns:android="http://schemas.android.com/apk/res/android"
 	android:layout_width="fill_parent"
 	android:layout_height="fill_parent"
 	android:divider="@drawable/divider_outside_inset"
 	android:dividerHeight="1dip"
 	android:scrollbarStyle="outsideInset"
+	android:fastScrollAlwaysVisible="true"
 	android:fastScrollEnabled="true"/>
