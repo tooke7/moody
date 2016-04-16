@@ -32,7 +32,6 @@ import android.media.MediaMetadataRetriever;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
-import android.text.format.DateUtils;
 import android.util.Log;
 import android.content.ContentResolver;
 import android.view.Gravity;
@@ -55,8 +54,7 @@ import android.content.DialogInterface;
  * The primary playback screen with playback controls and large cover display.
  */
 public class FullPlaybackActivity extends SlidingPlaybackActivity
-	implements SeekBar.OnSeekBarChangeListener
-	         , View.OnLongClickListener
+	implements View.OnLongClickListener
 {
 	public static final int DISPLAY_INFO_OVERLAP = 0;
 	public static final int DISPLAY_INFO_BELOW = 1;
@@ -65,10 +63,7 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 	private TextView mOverlayText;
 	private View mControlsTop;
 
-	private SeekBar mSeekBar;
 	private TableLayout mInfoTable;
-	private TextView mElapsedView;
-	private TextView mDurationView;
 	private TextView mQueuePosView;
 
 	private TextView mTitle;
@@ -83,12 +78,6 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 	 * True if the extra info is visible.
 	 */
 	private boolean mExtraInfoVisible;
-	/**
-	 * Current song duration in milliseconds.
-	 */
-	private long mDuration;
-	private boolean mSeekBarTracking;
-	private boolean mPaused;
 
 	/**
 	 * The current display mode, which determines layout and cover render style.
@@ -98,10 +87,6 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 	private Action mCoverPressAction;
 	private Action mCoverLongPressAction;
 
-	/**
-	 * Cached StringBuilder for formatting track position.
-	 */
-	private final StringBuilder mTimeBuilder = new StringBuilder();
 	/**
 	 * The currently playing song.
 	 */
@@ -172,11 +157,6 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 		mArtist = (TextView)findViewById(R.id.artist);
 
 		mControlsTop = findViewById(R.id.controls_top);
-		mElapsedView = (TextView)findViewById(R.id.elapsed);
-		mDurationView = (TextView)findViewById(R.id.duration);
-		mSeekBar = (SeekBar)findViewById(R.id.seek_bar);
-		mSeekBar.setMax(1000);
-		mSeekBar.setOnSeekBarChangeListener(this);
 		mQueuePosView = (TextView)findViewById(R.id.queue_pos);
 
 		mGenreView = (TextView)findViewById(R.id.genre);
@@ -190,7 +170,6 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 
 		setControlsVisible(settings.getBoolean(PrefKeys.VISIBLE_CONTROLS, PrefDefaults.VISIBLE_CONTROLS));
 		setExtraInfoVisible(settings.getBoolean(PrefKeys.VISIBLE_EXTRA_INFO, PrefDefaults.VISIBLE_EXTRA_INFO));
-		setDuration(0);
 	}
 
 	@Override
@@ -206,21 +185,6 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 
 		mCoverPressAction = Action.getAction(settings, PrefKeys.COVER_PRESS_ACTION, PrefDefaults.COVER_PRESS_ACTION);
 		mCoverLongPressAction = Action.getAction(settings, PrefKeys.COVER_LONGPRESS_ACTION, PrefDefaults.COVER_LONGPRESS_ACTION);
-	}
-
-	@Override
-	public void onResume()
-	{
-		super.onResume();
-		mPaused = false;
-		updateElapsedTime();
-	}
-
-	@Override
-	public void onPause()
-	{
-		super.onPause();
-		mPaused = true;
 	}
 
 	/**
@@ -276,18 +240,12 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 			}
 		}
 
-		if ((state & PlaybackService.FLAG_PLAYING) != 0)
-			updateElapsedTime();
-
 		if (mQueuePosView != null)
 			updateQueuePosition();
 	}
 
 	@Override
-	protected void onSongChange(Song song)
-	{
-		setDuration(song == null ? 0 : song.duration);
-
+	protected void onSongChange(Song song) {
 		if (mTitle != null) {
 			if (song == null) {
 				mTitle.setText(null);
@@ -302,7 +260,6 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 		}
 
 		mCurrentSong = song;
-		updateElapsedTime();
 
 		mHandler.sendEmptyMessage(MSG_LOAD_FAVOURITE_INFO);
 
@@ -336,17 +293,6 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 	{
 		if (mQueuePosView != null)
 			mUiHandler.sendEmptyMessage(MSG_UPDATE_POSITION);
-	}
-
-	/**
-	 * Update the current song duration fields.
-	 *
-	 * @param duration The new duration, in milliseconds.
-	 */
-	private void setDuration(long duration)
-	{
-		mDuration = duration;
-		mDurationView.setText(DateUtils.formatElapsedTime(mTimeBuilder, duration / 1000));
 	}
 
 	@Override
@@ -472,28 +418,6 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 	}
 
 	/**
-	 * Update seek bar progress and schedule another update in one second
-	 */
-	private void updateElapsedTime()
-	{
-		long position = PlaybackService.hasInstance() ? PlaybackService.get(this).getPosition() : 0;
-
-		if (!mSeekBarTracking) {
-			long duration = mDuration;
-			mSeekBar.setProgress(duration == 0 ? 0 : (int)(1000 * position / duration));
-		}
-
-		mElapsedView.setText(DateUtils.formatElapsedTime(mTimeBuilder, position / 1000));
-
-		if (!mPaused && mControlsVisible && (mState & PlaybackService.FLAG_PLAYING) != 0) {
-			// Try to update right after the duration increases by one second
-			long next = 1050 - position % 1000;
-			mUiHandler.removeMessages(MSG_UPDATE_PROGRESS);
-			mUiHandler.sendEmptyMessageDelayed(MSG_UPDATE_PROGRESS, next);
-		}
-	}
-
-	/**
 	 * Set the visibility of the controls views.
 	 *
 	 * @param visible True to show, false to hide
@@ -507,7 +431,6 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 
 		if (visible) {
 			mPlayPauseButton.requestFocus();
-			updateElapsedTime();
 		}
 	}
 
@@ -619,38 +542,29 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 	}
 
 	/**
-	 * Update the seekbar progress with the current song progress. This must be
-	 * called on the UI Handler.
-	 */
-	private static final int MSG_UPDATE_PROGRESS = 10;
-	/**
 	 * Save the hidden_controls preference to storage.
 	 */
-	private static final int MSG_SAVE_CONTROLS = 14;
+	private static final int MSG_SAVE_CONTROLS = 10;
 	/**
 	 * Call {@link #loadExtraInfo()}.
 	 */
-	private static final int MSG_LOAD_EXTRA_INFO = 15;
+	private static final int MSG_LOAD_EXTRA_INFO = 11;
 	/**
 	 * Pass obj to mExtraInfo.setText()
 	 */
-	private static final int MSG_COMMIT_INFO = 16;
+	private static final int MSG_COMMIT_INFO = 12;
 	/**
 	 * Calls {@link #updateQueuePosition()}.
 	 */
-	private static final int MSG_UPDATE_POSITION = 17;
-	/**
-	 * Calls {@link PlaybackService#seekToProgress(int)}.
-	 */
-	private static final int MSG_SEEK_TO_PROGRESS = 18;
+	private static final int MSG_UPDATE_POSITION = 13;
 	/**
 	 * Check if passed song is a favorite
 	 */
-	private static final int MSG_LOAD_FAVOURITE_INFO = 19;
+	private static final int MSG_LOAD_FAVOURITE_INFO = 14;
 	/**
 	 * Updates the favorites state
 	 */
-	private static final int MSG_COMMIT_FAVOURITE_INFO = 20;
+	private static final int MSG_COMMIT_FAVOURITE_INFO = 15;
 
 	@Override
 	public boolean handleMessage(Message message)
@@ -663,9 +577,6 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 			editor.apply();
 			break;
 		}
-		case MSG_UPDATE_PROGRESS:
-			updateElapsedTime();
-			break;
 		case MSG_LOAD_EXTRA_INFO:
 			loadExtraInfo();
 			break;
@@ -680,10 +591,6 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 		}
 		case MSG_UPDATE_POSITION:
 			updateQueuePosition();
-			break;
-		case MSG_SEEK_TO_PROGRESS:
-			PlaybackService.get(this).seekToProgress(message.arg1);
-			updateElapsedTime();
 			break;
 		case MSG_LOAD_FAVOURITE_INFO:
 			if (mCurrentSong != null) {
@@ -703,28 +610,6 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 		}
 
 		return true;
-	}
-
-	@Override
-	public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser)
-	{
-		if (fromUser) {
-			mElapsedView.setText(DateUtils.formatElapsedTime(mTimeBuilder, progress * mDuration / 1000000));
-			mUiHandler.removeMessages(MSG_SEEK_TO_PROGRESS);
-			mUiHandler.sendMessageDelayed(mUiHandler.obtainMessage(MSG_SEEK_TO_PROGRESS, progress, 0), 150);
-		}
-	}
-
-	@Override
-	public void onStartTrackingTouch(SeekBar seekBar)
-	{
-		mSeekBarTracking = true;
-	}
-
-	@Override
-	public void onStopTrackingTouch(SeekBar seekBar)
-	{
-		mSeekBarTracking = false;
 	}
 
 	@Override
