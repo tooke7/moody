@@ -54,7 +54,7 @@ import android.content.DialogInterface;
 /**
  * The primary playback screen with playback controls and large cover display.
  */
-public class FullPlaybackActivity extends PlaybackActivity
+public class FullPlaybackActivity extends SlidingPlaybackActivity
 	implements SeekBar.OnSeekBarChangeListener
 	         , View.OnLongClickListener
 {

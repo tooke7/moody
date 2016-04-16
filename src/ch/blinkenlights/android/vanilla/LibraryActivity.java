@@ -70,7 +70,7 @@ import junit.framework.Assert;
  * The library activity where songs to play can be selected from the library.
  */
 public class LibraryActivity
-	extends PlaybackActivity
+	extends SlidingPlaybackActivity
 	implements DialogInterface.OnClickListener
 	         , DialogInterface.OnDismissListener
 	         , SearchView.OnQueryTextListener

@@ -20,7 +20,7 @@ package ch.blinkenlights.android.vanilla;
 import android.view.Menu;
 import android.view.MenuItem;
 
-public class SlidingPlaybackActivity extends PlaybackActivity 
+public class SlidingPlaybackActivity extends PlaybackActivity
 	implements SlidingView.Callback
 {
 	private Menu mMenu;
