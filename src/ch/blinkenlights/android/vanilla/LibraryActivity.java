@@ -799,11 +799,11 @@ public class LibraryActivity
 	public boolean onCreateOptionsMenu(Menu menu)
 	{
 		// called before super to have it on top
-		menu.add(0, MENU_PLAYBACK, 0, R.string.playback_view);
 		super.onCreateOptionsMenu(menu);
 
+		menu.add(0, MENU_PLAYBACK, 0, R.string.playback_view);
 		menu.add(0, MENU_SEARCH, 0, R.string.search).setIcon(R.drawable.ic_menu_search).setVisible(false);
-		menu.add(0, MENU_SORT, 0, R.string.sort_by).setIcon(R.drawable.ic_menu_sort_alphabetically);
+		menu.add(0, MENU_SORT, 30, R.string.sort_by).setIcon(R.drawable.ic_menu_sort_alphabetically);
 		return true;
 	}
 

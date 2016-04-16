@@ -36,8 +36,14 @@ public class SlidingPlaybackActivity extends PlaybackActivity
 
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
-		mMenu = menu;
 		super.onCreateOptionsMenu(menu);
+
+		mMenu = menu;
+		menu.add(0, MENU_SHOW_QUEUE, 20, R.string.show_queue);
+		menu.add(0, MENU_HIDE_QUEUE, 20, R.string.hide_queue);
+		menu.add(0, MENU_CLEAR_QUEUE, 20, R.string.dequeue_rest);
+		menu.add(0, MENU_EMPTY_QUEUE, 20, R.string.empty_the_queue);
+		menu.add(0, MENU_SAVE_QUEUE_AS_PLAYLIST, 20, R.string.save_as_playlist);
 		onSlideFullyExpanded(false);
 		return true;
 	}

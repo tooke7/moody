@@ -378,13 +378,7 @@ public abstract class PlaybackActivity extends Activity
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu)
 	{
-		menu.add(0, MENU_PREFS, 0, R.string.settings).setIcon(R.drawable.ic_menu_preferences);
-		menu.add(0, MENU_SHOW_QUEUE, 0, R.string.show_queue);
-		menu.add(0, MENU_HIDE_QUEUE, 0, R.string.hide_queue);
-		menu.add(0, MENU_CLEAR_QUEUE, 0, R.string.dequeue_rest);
-		menu.add(0, MENU_EMPTY_QUEUE, 0, R.string.empty_the_queue);
-		menu.add(0, MENU_SAVE_QUEUE_AS_PLAYLIST, 0, R.string.save_as_playlist);
-
+		menu.add(0, MENU_PREFS, 10, R.string.settings).setIcon(R.drawable.ic_menu_preferences);
 		return true;
 	}
 
