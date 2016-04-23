@@ -24,8 +24,6 @@ import android.view.MenuItem;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
-import android.util.Log;
-
 public class SlidingPlaybackActivity extends PlaybackActivity
 	implements SlidingView.Callback,
 	           SeekBar.OnSeekBarChangeListener
@@ -177,7 +175,7 @@ public class SlidingPlaybackActivity extends PlaybackActivity
 	 */
 	private void updateElapsedTime() {
 		long position = PlaybackService.hasInstance() ? PlaybackService.get(this).getPosition() : 0;
-Log.v("VanillaMusic", "TOCK TOCK");
+
 		if (!mSeekBarTracking) {
 			long duration = mDuration;
 			mSeekBar.setProgress(duration == 0 ? 0 : (int)(1000 * position / duration));
