@@ -32,7 +32,6 @@ import android.media.MediaMetadataRetriever;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
-import android.text.format.DateUtils;
 import android.util.Log;
 import android.content.ContentResolver;
 import android.view.Gravity;
@@ -54,9 +53,8 @@ import android.content.DialogInterface;
 /**
  * The primary playback screen with playback controls and large cover display.
  */
-public class FullPlaybackActivity extends PlaybackActivity
-	implements SeekBar.OnSeekBarChangeListener
-	         , View.OnLongClickListener
+public class FullPlaybackActivity extends SlidingPlaybackActivity
+	implements View.OnLongClickListener
 {
 	public static final int DISPLAY_INFO_OVERLAP = 0;
 	public static final int DISPLAY_INFO_BELOW = 1;
@@ -64,12 +62,8 @@ public class FullPlaybackActivity extends PlaybackActivity
 
 	private TextView mOverlayText;
 	private View mControlsTop;
-	private View mControlsBottom;
 
-	private SeekBar mSeekBar;
 	private TableLayout mInfoTable;
-	private TextView mElapsedView;
-	private TextView mDurationView;
 	private TextView mQueuePosView;
 
 	private TextView mTitle;
@@ -84,12 +78,6 @@ public class FullPlaybackActivity extends PlaybackActivity
 	 * True if the extra info is visible.
 	 */
 	private boolean mExtraInfoVisible;
-	/**
-	 * Current song duration in milliseconds.
-	 */
-	private long mDuration;
-	private boolean mSeekBarTracking;
-	private boolean mPaused;
 
 	/**
 	 * The current display mode, which determines layout and cover render style.
@@ -99,10 +87,6 @@ public class FullPlaybackActivity extends PlaybackActivity
 	private Action mCoverPressAction;
 	private Action mCoverLongPressAction;
 
-	/**
-	 * Cached StringBuilder for formatting track position.
-	 */
-	private final StringBuilder mTimeBuilder = new StringBuilder();
 	/**
 	 * The currently playing song.
 	 */
@@ -161,14 +145,6 @@ public class FullPlaybackActivity extends PlaybackActivity
 		coverView.setOnLongClickListener(this);
 		mCoverView = coverView;
 
-		mControlsBottom = findViewById(R.id.controls_bottom);
-		View previousButton = findViewById(R.id.previous);
-		previousButton.setOnClickListener(this);
-		mPlayPauseButton = (ImageButton)findViewById(R.id.play_pause);
-		mPlayPauseButton.setOnClickListener(this);
-		View nextButton = findViewById(R.id.next);
-		nextButton.setOnClickListener(this);
-
 		TableLayout table = (TableLayout)findViewById(R.id.info_table);
 		if (table != null) {
 			table.setOnClickListener(this);
@@ -181,11 +157,6 @@ public class FullPlaybackActivity extends PlaybackActivity
 		mArtist = (TextView)findViewById(R.id.artist);
 
 		mControlsTop = findViewById(R.id.controls_top);
-		mElapsedView = (TextView)findViewById(R.id.elapsed);
-		mDurationView = (TextView)findViewById(R.id.duration);
-		mSeekBar = (SeekBar)findViewById(R.id.seek_bar);
-		mSeekBar.setMax(1000);
-		mSeekBar.setOnSeekBarChangeListener(this);
 		mQueuePosView = (TextView)findViewById(R.id.queue_pos);
 
 		mGenreView = (TextView)findViewById(R.id.genre);
@@ -195,16 +166,10 @@ public class FullPlaybackActivity extends PlaybackActivity
 		mFormatView = (TextView)findViewById(R.id.format);
 		mReplayGainView = (TextView)findViewById(R.id.replaygain);
 
-		mShuffleButton = (ImageButton)findViewById(R.id.shuffle);
-		mShuffleButton.setOnClickListener(this);
-		registerForContextMenu(mShuffleButton);
-		mEndButton = (ImageButton)findViewById(R.id.end_action);
-		mEndButton.setOnClickListener(this);
-		registerForContextMenu(mEndButton);
+		bindControlButtons();
 
 		setControlsVisible(settings.getBoolean(PrefKeys.VISIBLE_CONTROLS, PrefDefaults.VISIBLE_CONTROLS));
 		setExtraInfoVisible(settings.getBoolean(PrefKeys.VISIBLE_EXTRA_INFO, PrefDefaults.VISIBLE_EXTRA_INFO));
-		setDuration(0);
 	}
 
 	@Override
@@ -220,21 +185,6 @@ public class FullPlaybackActivity extends PlaybackActivity
 
 		mCoverPressAction = Action.getAction(settings, PrefKeys.COVER_PRESS_ACTION, PrefDefaults.COVER_PRESS_ACTION);
 		mCoverLongPressAction = Action.getAction(settings, PrefKeys.COVER_LONGPRESS_ACTION, PrefDefaults.COVER_LONGPRESS_ACTION);
-	}
-
-	@Override
-	public void onResume()
-	{
-		super.onResume();
-		mPaused = false;
-		updateElapsedTime();
-	}
-
-	@Override
-	public void onPause()
-	{
-		super.onPause();
-		mPaused = true;
 	}
 
 	/**
@@ -290,18 +240,12 @@ public class FullPlaybackActivity extends PlaybackActivity
 			}
 		}
 
-		if ((state & PlaybackService.FLAG_PLAYING) != 0)
-			updateElapsedTime();
-
 		if (mQueuePosView != null)
 			updateQueuePosition();
 	}
 
 	@Override
-	protected void onSongChange(Song song)
-	{
-		setDuration(song == null ? 0 : song.duration);
-
+	protected void onSongChange(Song song) {
 		if (mTitle != null) {
 			if (song == null) {
 				mTitle.setText(null);
@@ -316,7 +260,6 @@ public class FullPlaybackActivity extends PlaybackActivity
 		}
 
 		mCurrentSong = song;
-		updateElapsedTime();
 
 		mHandler.sendEmptyMessage(MSG_LOAD_FAVOURITE_INFO);
 
@@ -352,28 +295,15 @@ public class FullPlaybackActivity extends PlaybackActivity
 			mUiHandler.sendEmptyMessage(MSG_UPDATE_POSITION);
 	}
 
-	/**
-	 * Update the current song duration fields.
-	 *
-	 * @param duration The new duration, in milliseconds.
-	 */
-	private void setDuration(long duration)
-	{
-		mDuration = duration;
-		mDurationView.setText(DateUtils.formatElapsedTime(mTimeBuilder, duration / 1000));
-	}
-
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu)
 	{
 		super.onCreateOptionsMenu(menu);
-		menu.add(0, MENU_CLEAR_QUEUE, 0, R.string.dequeue_rest).setIcon(R.drawable.ic_menu_close_clear_cancel);
-		menu.add(0, MENU_DELETE, 0, R.string.delete);
-		menu.add(0, MENU_ENQUEUE_ALBUM, 0, R.string.enqueue_current_album).setIcon(R.drawable.ic_menu_add);
-		menu.add(0, MENU_ENQUEUE_ARTIST, 0, R.string.enqueue_current_artist).setIcon(R.drawable.ic_menu_add);
-		menu.add(0, MENU_ENQUEUE_GENRE, 0, R.string.enqueue_current_genre).setIcon(R.drawable.ic_menu_add);
+		menu.add(0, MENU_DELETE, 30, R.string.delete);
+		menu.add(0, MENU_ENQUEUE_ALBUM, 30, R.string.enqueue_current_album).setIcon(R.drawable.ic_menu_add);
+		menu.add(0, MENU_ENQUEUE_ARTIST, 30, R.string.enqueue_current_artist).setIcon(R.drawable.ic_menu_add);
+		menu.add(0, MENU_ENQUEUE_GENRE, 30, R.string.enqueue_current_genre).setIcon(R.drawable.ic_menu_add);
 		mFavorites = menu.add(0, MENU_SONG_FAVORITE, 0, R.string.add_to_favorites).setIcon(R.drawable.btn_rating_star_off_mtrl_alpha).setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_IF_ROOM);
-		menu.add(0, MENU_SHOW_QUEUE, 0, R.string.show_queue);
 
 		// ensure that mFavorites is updated
 		mHandler.sendEmptyMessage(MSG_LOAD_FAVOURITE_INFO);
@@ -389,13 +319,13 @@ public class FullPlaybackActivity extends PlaybackActivity
 			openLibrary(null);
 			break;
 		case MENU_ENQUEUE_ALBUM:
-			PlaybackService.get(this).enqueueFromCurrent(MediaUtils.TYPE_ALBUM);
+			PlaybackService.get(this).enqueueFromSong(PlaybackService.get(this).getSong(0), MediaUtils.TYPE_ALBUM);
 			break;
 		case MENU_ENQUEUE_ARTIST:
-			PlaybackService.get(this).enqueueFromCurrent(MediaUtils.TYPE_ARTIST);
+			PlaybackService.get(this).enqueueFromSong(PlaybackService.get(this).getSong(0), MediaUtils.TYPE_ARTIST);
 			break;
 		case MENU_ENQUEUE_GENRE:
-			PlaybackService.get(this).enqueueFromCurrent(MediaUtils.TYPE_GENRE);
+			PlaybackService.get(this).enqueueFromSong(PlaybackService.get(this).getSong(0), MediaUtils.TYPE_GENRE);
 			break;
 		case MENU_SONG_FAVORITE:
 			Song song = (PlaybackService.get(this)).getSong(0);
@@ -472,36 +402,19 @@ public class FullPlaybackActivity extends PlaybackActivity
 	public boolean onKeyUp(int keyCode, KeyEvent event)
 	{
 		switch (keyCode) {
-		case KeyEvent.KEYCODE_DPAD_CENTER:
-		case KeyEvent.KEYCODE_ENTER:
-			setControlsVisible(!mControlsVisible);
-			mHandler.sendEmptyMessage(MSG_SAVE_CONTROLS);
-			return true;
+			case KeyEvent.KEYCODE_DPAD_CENTER:
+			case KeyEvent.KEYCODE_ENTER:
+				setControlsVisible(!mControlsVisible);
+				mHandler.sendEmptyMessage(MSG_SAVE_CONTROLS);
+				return true;
+			case KeyEvent.KEYCODE_BACK:
+				if (mSlidingView.isHidden() == false) {
+					mSlidingView.hideSlide();
+					return true;
+				}
 		}
 
 		return super.onKeyUp(keyCode, event);
-	}
-
-	/**
-	 * Update seek bar progress and schedule another update in one second
-	 */
-	private void updateElapsedTime()
-	{
-		long position = PlaybackService.hasInstance() ? PlaybackService.get(this).getPosition() : 0;
-
-		if (!mSeekBarTracking) {
-			long duration = mDuration;
-			mSeekBar.setProgress(duration == 0 ? 0 : (int)(1000 * position / duration));
-		}
-
-		mElapsedView.setText(DateUtils.formatElapsedTime(mTimeBuilder, position / 1000));
-
-		if (!mPaused && mControlsVisible && (mState & PlaybackService.FLAG_PLAYING) != 0) {
-			// Try to update right after the duration increases by one second
-			long next = 1050 - position % 1000;
-			mUiHandler.removeMessages(MSG_UPDATE_PROGRESS);
-			mUiHandler.sendEmptyMessageDelayed(MSG_UPDATE_PROGRESS, next);
-		}
 	}
 
 	/**
@@ -513,12 +426,11 @@ public class FullPlaybackActivity extends PlaybackActivity
 	{
 		int mode = visible ? View.VISIBLE : View.GONE;
 		mControlsTop.setVisibility(mode);
-		mControlsBottom.setVisibility(mode);
+		mSlidingView.setVisibility(mode);
 		mControlsVisible = visible;
 
 		if (visible) {
 			mPlayPauseButton.requestFocus();
-			updateElapsedTime();
 		}
 	}
 
@@ -630,38 +542,29 @@ public class FullPlaybackActivity extends PlaybackActivity
 	}
 
 	/**
-	 * Update the seekbar progress with the current song progress. This must be
-	 * called on the UI Handler.
-	 */
-	private static final int MSG_UPDATE_PROGRESS = 10;
-	/**
 	 * Save the hidden_controls preference to storage.
 	 */
-	private static final int MSG_SAVE_CONTROLS = 14;
+	private static final int MSG_SAVE_CONTROLS = 10;
 	/**
 	 * Call {@link #loadExtraInfo()}.
 	 */
-	private static final int MSG_LOAD_EXTRA_INFO = 15;
+	private static final int MSG_LOAD_EXTRA_INFO = 11;
 	/**
 	 * Pass obj to mExtraInfo.setText()
 	 */
-	private static final int MSG_COMMIT_INFO = 16;
+	private static final int MSG_COMMIT_INFO = 12;
 	/**
 	 * Calls {@link #updateQueuePosition()}.
 	 */
-	private static final int MSG_UPDATE_POSITION = 17;
-	/**
-	 * Calls {@link PlaybackService#seekToProgress(int)}.
-	 */
-	private static final int MSG_SEEK_TO_PROGRESS = 18;
+	private static final int MSG_UPDATE_POSITION = 13;
 	/**
 	 * Check if passed song is a favorite
 	 */
-	private static final int MSG_LOAD_FAVOURITE_INFO = 19;
+	private static final int MSG_LOAD_FAVOURITE_INFO = 14;
 	/**
 	 * Updates the favorites state
 	 */
-	private static final int MSG_COMMIT_FAVOURITE_INFO = 20;
+	private static final int MSG_COMMIT_FAVOURITE_INFO = 15;
 
 	@Override
 	public boolean handleMessage(Message message)
@@ -671,12 +574,9 @@ public class FullPlaybackActivity extends PlaybackActivity
 			SharedPreferences.Editor editor = PlaybackService.getSettings(this).edit();
 			editor.putBoolean(PrefKeys.VISIBLE_CONTROLS, mControlsVisible);
 			editor.putBoolean(PrefKeys.VISIBLE_EXTRA_INFO, mExtraInfoVisible);
-			editor.commit();
+			editor.apply();
 			break;
 		}
-		case MSG_UPDATE_PROGRESS:
-			updateElapsedTime();
-			break;
 		case MSG_LOAD_EXTRA_INFO:
 			loadExtraInfo();
 			break;
@@ -691,10 +591,6 @@ public class FullPlaybackActivity extends PlaybackActivity
 		}
 		case MSG_UPDATE_POSITION:
 			updateQueuePosition();
-			break;
-		case MSG_SEEK_TO_PROGRESS:
-			PlaybackService.get(this).seekToProgress(message.arg1);
-			updateElapsedTime();
 			break;
 		case MSG_LOAD_FAVOURITE_INFO:
 			if (mCurrentSong != null) {
@@ -714,28 +610,6 @@ public class FullPlaybackActivity extends PlaybackActivity
 		}
 
 		return true;
-	}
-
-	@Override
-	public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser)
-	{
-		if (fromUser) {
-			mElapsedView.setText(DateUtils.formatElapsedTime(mTimeBuilder, progress * mDuration / 1000000));
-			mUiHandler.removeMessages(MSG_SEEK_TO_PROGRESS);
-			mUiHandler.sendMessageDelayed(mUiHandler.obtainMessage(MSG_SEEK_TO_PROGRESS, progress, 0), 150);
-		}
-	}
-
-	@Override
-	public void onStartTrackingTouch(SeekBar seekBar)
-	{
-		mSeekBarTracking = true;
-	}
-
-	@Override
-	public void onStopTrackingTouch(SeekBar seekBar)
-	{
-		mSeekBarTracking = false;
 	}
 
 	@Override
@@ -780,4 +654,12 @@ public class FullPlaybackActivity extends PlaybackActivity
 
 		return true;
 	}
+
+	@Override
+	public void onSlideFullyExpanded(boolean expanded) {
+		super.onSlideFullyExpanded(expanded);
+		if (expanded)
+			setExtraInfoVisible(false);
+	}
+
 }

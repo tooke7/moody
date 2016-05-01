@@ -23,8 +23,8 @@ THE SOFTWARE.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
 	package="ch.blinkenlights.android.vanilla"
-	android:versionName="1.0.37"
-	android:versionCode="1037"
+	android:versionName="1.0.39"
+	android:versionCode="1039"
 	android:installLocation="auto">
 	<uses-sdk android:minSdkVersion="15" android:targetSdkVersion="23" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -36,6 +36,10 @@ THE SOFTWARE.
 		android:icon="@drawable/icon"
 		android:label="@string/app_name">
 
+		<meta-data
+		android:name="com.mirrorlink.android.rockscout.allow-offline-access"
+		android:value="true" />
+
 		<activity
 			android:name="FullPlaybackActivity"
 			android:launchMode="singleTask" />
@@ -46,15 +50,13 @@ THE SOFTWARE.
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
 				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.APP_MUSIC" />
+				<category android:name="android.intent.category.DEFAULT" />
 			</intent-filter>
 		</activity>
 		<activity
 			android:name="PlaylistActivity"
 			android:launchMode="singleTask" />
-		<activity
-			android:name="ShowQueueActivity"
-			android:launchMode="singleTask"
-			/>
 		<activity
 			android:name="MiniPlaybackActivity"
 			android:theme="@style/Dialog"

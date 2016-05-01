@@ -75,7 +75,7 @@ import junit.framework.Assert;
  * The library activity where songs to play can be selected from the library.
  */
 public class LibraryActivity
-	extends PlaybackActivity
+	extends SlidingPlaybackActivity
 	implements DialogInterface.OnClickListener
 	         , DialogInterface.OnDismissListener
 	         , SearchView.OnQueryTextListener
@@ -238,6 +238,7 @@ public class LibraryActivity
 		}
 
 		loadAlbumIntent(getIntent());
+		bindControlButtons();
 	}
 
 	@Override
@@ -318,8 +319,14 @@ public class LibraryActivity
 		case KeyEvent.KEYCODE_BACK:
 			Limiter limiter = mPagerAdapter.getCurrentLimiter();
 
-			if (mBottomBarControls.showSearch(false))
+			if (mSlidingView.isHidden() == false) {
+				mSlidingView.hideSlide();
 				break;
+			}
+
+			if (mBottomBarControls.showSearch(false)) {
+				break;
+			}
 
 			if (limiter != null) {
 				int pos = -1;
@@ -440,6 +447,7 @@ public class LibraryActivity
 	 */
 	private void expand(Intent intent)
 	{
+		mBottomBarControls.showSearch(false);
 		int type = intent.getIntExtra("type", MediaUtils.TYPE_INVALID);
 		long id = intent.getLongExtra("id", LibraryAdapter.INVALID_ID);
 		int tab = mPagerAdapter.setLimiter(mPagerAdapter.mAdapters[type].buildLimiter(id));
@@ -455,6 +463,8 @@ public class LibraryActivity
 	 */
 	public void openPlaybackActivity()
 	{
+		if (mSlidingView.isExpanded())
+			mSlidingView.hideSlideDelayed();
 		startActivity(new Intent(this, FullPlaybackActivity.class));
 	}
 
@@ -828,16 +838,10 @@ public class LibraryActivity
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu)
 	{
-		// called before super to have it on top
-		menu.add(0, MENU_PLAYBACK, 0, R.string.playback_view);
 		super.onCreateOptionsMenu(menu);
-
-		MenuItem search = menu.add(0, MENU_SEARCH, 0, R.string.search).setIcon(R.drawable.ic_menu_search);
-		search.setVisible(false);
-
-		menu.add(0, MENU_SORT, 0, R.string.sort_by).setIcon(R.drawable.ic_menu_sort_alphabetically);
-		menu.add(0, MENU_SHOW_QUEUE, 0, R.string.show_queue);
-
+		menu.add(0, MENU_PLAYBACK, 0, R.string.playback_view);
+		menu.add(0, MENU_SEARCH, 0, R.string.search).setIcon(R.drawable.ic_menu_search).setVisible(false);
+		menu.add(0, MENU_SORT, 30, R.string.sort_by).setIcon(R.drawable.ic_menu_sort_alphabetically);
 		return true;
 	}
 
@@ -930,7 +934,7 @@ public class LibraryActivity
 		case MSG_SAVE_PAGE: {
 			SharedPreferences.Editor editor = PlaybackService.getSettings(this).edit();
 			editor.putInt("library_page", message.arg1);
-			editor.commit();
+			editor.apply();
 			break;
 		}
 		case MSG_UPDATE_COVER: {
@@ -960,6 +964,9 @@ public class LibraryActivity
 	protected void onStateChange(int state, int toggled)
 	{
 		super.onStateChange(state, toggled);
+
+		if ((state & PlaybackService.FLAG_EMPTY_QUEUE) != 0)
+			mBottomBarControls.setSong(null);
 	}
 
 	@Override
