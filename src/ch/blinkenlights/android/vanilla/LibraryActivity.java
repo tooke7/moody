@@ -58,6 +58,7 @@ import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.SearchView;
+import android.util.Log;
 
 import java.io.File;
 import java.util.HashMap;
@@ -208,6 +209,7 @@ public class LibraryActivity
 		mVanillaTabLayout = (VanillaTabLayout)findViewById(R.id.sliding_tabs);
 		mVanillaTabLayout.setOnPageChangeListener(pagerAdapter);
 
+        Log.d("FOO", "loadTabOrder()");
 		loadTabOrder();
 		int page = settings.getInt(PrefKeys.LIBRARY_PAGE, PrefDefaults.LIBRARY_PAGE);
 		if (page != 0) {

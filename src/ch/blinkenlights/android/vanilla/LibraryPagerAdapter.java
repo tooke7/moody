@@ -34,6 +34,7 @@ import android.os.Parcelable;
 import android.provider.MediaStore;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
@@ -62,18 +63,21 @@ public class LibraryPagerAdapter
 	 * The number of unique list types. The number of visible lists may be
 	 * smaller.
 	 */
-	public static final int MAX_ADAPTER_COUNT = 6;
+	//public static final int MAX_ADAPTER_COUNT = 6;
+	public static final int MAX_ADAPTER_COUNT = 1;
 	/**
 	 * The human-readable title for each list. The positions correspond to the
 	 * MediaUtils ids, so e.g. TITLES[MediaUtils.TYPE_SONG] = R.string.songs
 	 */
-	public static final int[] TITLES = { R.string.artists, R.string.albums, R.string.songs,
-	                                     R.string.playlists, R.string.genres, R.string.files };
+	//public static final int[] TITLES = { R.string.artists, R.string.albums, R.string.songs,
+	//                                     R.string.playlists, R.string.genres, R.string.files };
+	public static final int[] TITLES = { R.string.songs };
 	/**
 	 * Default tab order.
 	 */
-	public static final int[] DEFAULT_ORDER = { MediaUtils.TYPE_ARTIST, MediaUtils.TYPE_ALBUM, MediaUtils.TYPE_SONG,
-	                                            MediaUtils.TYPE_PLAYLIST, MediaUtils.TYPE_GENRE, MediaUtils.TYPE_FILE };
+	//public static final int[] DEFAULT_ORDER = { MediaUtils.TYPE_ARTIST, MediaUtils.TYPE_ALBUM, MediaUtils.TYPE_SONG,
+	//                                            MediaUtils.TYPE_PLAYLIST, MediaUtils.TYPE_GENRE, MediaUtils.TYPE_FILE };
+	public static final int[] DEFAULT_ORDER = { MediaUtils.TYPE_SONG };
 	/**
 	 * The user-chosen tab order.
 	 */
@@ -391,6 +395,8 @@ public class LibraryPagerAdapter
 	@Override
 	public CharSequence getPageTitle(int position)
 	{
+        Log.d("FOO", "position=" + position);
+        Log.d("FOO", "mTabOrder[position]=" + mTabOrder[position]);
 		return mActivity.getResources().getText(TITLES[mTabOrder[position]]);
 	}
 

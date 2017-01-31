@@ -61,7 +61,8 @@ public class MediaUtils {
 	/**
 	 * Type indicating an id represents an artist.
 	 */
-	public static final int TYPE_ARTIST = 0;
+	//public static final int TYPE_ARTIST = 0;
+	public static final int TYPE_ARTIST = 2;
 	/**
 	 * Type indicating an id represents an album.
 	 */
@@ -69,7 +70,8 @@ public class MediaUtils {
 	/**
 	 * Type indicating an id represents a song.
 	 */
-	public static final int TYPE_SONG = 2;
+	//public static final int TYPE_SONG = 2;
+	public static final int TYPE_SONG = 0;
 	/**
 	 * Type indicating an id represents a playlist.
 	 */
