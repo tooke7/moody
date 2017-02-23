@@ -395,8 +395,6 @@ public class LibraryPagerAdapter
 	@Override
 	public CharSequence getPageTitle(int position)
 	{
-        Log.d("FOO", "position=" + position);
-        Log.d("FOO", "mTabOrder[position]=" + mTabOrder[position]);
 		return mActivity.getResources().getText(TITLES[mTabOrder[position]]);
 	}
 

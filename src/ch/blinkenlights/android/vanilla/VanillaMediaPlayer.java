@@ -24,6 +24,9 @@ import android.content.Intent;
 import android.media.MediaPlayer;
 import android.media.audiofx.AudioEffect;
 import android.os.Build;
+import android.util.Log;
+
+import com.jacobobryant.moody.C;
 
 import java.io.FileInputStream;
 import java.io.IOException;

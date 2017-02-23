@@ -61,6 +61,9 @@ import android.util.Log;
 import android.view.View;
 import android.widget.RemoteViews;
 import android.widget.Toast;
+
+import com.jacobobryant.moody.C;
+
 import java.lang.Math;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -758,7 +761,8 @@ public final class PlaybackService extends Service
 			Log.d("VanillaMusic", "Must not create new media player object");
 		}
 
-		if(doGapless == true) {
+		//if(doGapless == true) {
+        if (false) {
 			try {
 				if(nextSong.path.equals(mPreparedMediaPlayer.getDataSource()) == false) {
 					// Prepared MP has a different data source: We need to re-initalize
@@ -1291,7 +1295,7 @@ public final class PlaybackService extends Service
 		if (mMediaPlayer.isPlaying())
 			mMediaPlayer.stop();
 
-		Song song = mTimeline.shiftCurrentSong(delta);
+		Song song = mTimeline.shiftCurrentSong(delta, getPosition());
 		mCurrentSong = song;
 		if (song == null) {
 			if (MediaUtils.isSongAvailable(getApplicationContext())) {
@@ -1330,18 +1334,17 @@ public final class PlaybackService extends Service
 			mMediaPlayerInitialized = false;
 			mMediaPlayer.reset();
 
-			if(mPreparedMediaPlayer.isPlaying()) {
-				// The prepared media player is playing as the previous song
-				// reched its end 'naturally' (-> gapless)
-				// We can now swap mPreparedMediaPlayer and mMediaPlayer
-				VanillaMediaPlayer tmpPlayer = mMediaPlayer;
-				mMediaPlayer = mPreparedMediaPlayer;
-				mPreparedMediaPlayer = tmpPlayer; // this was mMediaPlayer and is in reset() state
-			}
-			else {
+			//if(mPreparedMediaPlayer.isPlaying()) {
+			//	// The prepared media player is playing as the previous song
+			//	// reched its end 'naturally' (-> gapless)
+			//	// We can now swap mPreparedMediaPlayer and mMediaPlayer
+			//	VanillaMediaPlayer tmpPlayer = mMediaPlayer;
+			//	mMediaPlayer = mPreparedMediaPlayer;
+			//	mPreparedMediaPlayer = tmpPlayer; // this was mMediaPlayer and is in reset() state
+			//}
+			//else {
 				prepareMediaPlayer(mMediaPlayer, song.path);
-			}
-
+			//}
 
 			mMediaPlayerInitialized = true;
 			// Cancel any pending gapless updates and re-send them
@@ -1383,7 +1386,6 @@ public final class PlaybackService extends Service
 	@Override
 	public void onCompletion(MediaPlayer player)
 	{
-
 		// Count this song as played
 		mHandler.sendMessageDelayed(mHandler.obtainMessage(MSG_UPDATE_PLAYCOUNTS, 1, 0, mCurrentSong), 800);
 

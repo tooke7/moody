@@ -33,7 +33,8 @@ THE SOFTWARE.
 			android:layout_width="match_parent"
 			android:layout_height="wrap_content"
 			android:elevation="4dp"
-			android:background="?tabs_background" />
+            android:background="?tabs_background"
+            android:visibility="gone" />
 		<android.support.v4.view.ViewPager
 			android:id="@+id/pager"
 			android:layout_width="fill_parent"

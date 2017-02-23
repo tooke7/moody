@@ -60,6 +60,8 @@ import android.widget.TextView;
 import android.widget.SearchView;
 import android.util.Log;
 
+import com.jacobobryant.moody.Moody;
+
 import java.io.File;
 import java.util.HashMap;
 import java.util.List;
@@ -209,7 +211,6 @@ public class LibraryActivity
 		mVanillaTabLayout = (VanillaTabLayout)findViewById(R.id.sliding_tabs);
 		mVanillaTabLayout.setOnPageChangeListener(pagerAdapter);
 
-        Log.d("FOO", "loadTabOrder()");
 		loadTabOrder();
 		int page = settings.getInt(PrefKeys.LIBRARY_PAGE, PrefDefaults.LIBRARY_PAGE);
 		if (page != 0) {
@@ -218,6 +219,8 @@ public class LibraryActivity
 
 		loadAlbumIntent(getIntent());
 		bindControlButtons();
+
+        Moody.getInstance(this).populate();
 	}
 
 	/**

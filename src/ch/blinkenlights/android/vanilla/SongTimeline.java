@@ -29,6 +29,12 @@ import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.MediaStore;
+import android.util.Log;
+
+import com.jacobobryant.moody.C;
+import com.jacobobryant.moody.Metadata;
+import com.jacobobryant.moody.Moody;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -36,6 +42,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.ListIterator;
 import junit.framework.Assert;
 
@@ -612,8 +620,82 @@ public final class SongTimeline {
 	 *
 	 * @param delta -1 to move to the previous song or 1 for the next.
 	 */
-	private void shiftCurrentSongInternal(int delta)
+	private void shiftCurrentSongInternal(int delta, long position)
 	{
+        //Log.d("FOO", "shiftCurrentSongInternal");
+        //Log.d("FOO", "getPosition()=" + position);
+        //Log.d("FOO", "duration=" + mSongs.get(mCurrentPos).duration);
+        //long percent_done = 100 * position / mSongs.get(mCurrentPos).duration;
+        //Log.d("FOO", "percent_done=" + percent_done);
+
+        //if (position < 5000) {
+        //    Log.d("FOO", "playing bill nye");
+        //    QueryTask query = new QueryTask(MediaLibrary.VIEW_SONGS_ALBUMS_ARTISTS,
+        //            Song.FILLED_PLAYLIST_PROJECTION, "title=\"Bill Nye the Science Guy\"",
+        //            null, null);
+        //    //query.mode = MODE_FLUSH_AND_PLAY_NEXT;
+        //    query.mode = MODE_ENQUEUE_AS_NEXT;
+        //    addSongs(mContext, query);
+        //}
+        // get current play duration, decide if the song was skipped or listened.
+        // call addSongs with MODE_FLUSH_AND_PLAY_NEXT here hohoho
+
+
+        //if (delta == 1) {
+        //    QueryTask query = new QueryTask(MediaLibrary.VIEW_SONGS_ALBUMS_ARTISTS,
+        //            Song.FILLED_PLAYLIST_PROJECTION, "title=\"Bill Nye the Science Guy\"",
+        //            null, null);
+        //    //query.mode = MODE_FLUSH_AND_PLAY_NEXT;
+        //    query.mode = MODE_ENQUEUE_AS_NEXT;
+        //    addSongs(mContext, query);
+        //}
+
+        //if (false) {
+        if (delta == 1) {
+            Moody moody = Moody.getInstance(mContext);
+            moody.update(mSongs.get(mCurrentPos), position);
+
+            do {
+                Metadata next = moody.pick_next();
+
+                // construct the query
+                StringBuilder selection = new StringBuilder();
+                List<String> args = new LinkedList<>();
+                if (next.artist != null) {
+                    selection.append("artist=?");
+                    args.add(next.artist);
+                }
+                if (next.album != null) {
+                    if (selection.length() > 0) {
+                        selection.append(" AND ");
+                    }
+                    selection.append("album=?");
+                    args.add(next.album);
+                }
+                if (next.title != null) {
+                    if (selection.length() > 0) {
+                        selection.append(" AND ");
+                    }
+                    selection.append("title=?");
+                    args.add(next.title);
+                }
+                String[] argsArray = args.toArray(new String[args.size()]);
+
+                // add the next song
+                QueryTask query = new QueryTask(MediaLibrary.VIEW_SONGS_ALBUMS_ARTISTS,
+                        Song.FILLED_PLAYLIST_PROJECTION, selection.toString(),
+                        argsArray, null);
+                //query.mode = MODE_ENQUEUE_AS_NEXT;
+                query.mode = MODE_FLUSH_AND_PLAY_NEXT;
+                int num = addSongs(mContext, query);
+                if (num == 0) {
+                    Log.e(C.TAG, "couldn't add song: " + next);
+                } else {
+                    break;
+                }
+            } while (true);
+        }
+
 		int pos = mCurrentPos + delta;
 
 		if (mFinishAction != FINISH_RANDOM && pos == mSongs.size()) {
@@ -663,21 +745,21 @@ public final class SongTimeline {
 	 * @param delta One of SongTimeline.SHIFT_*.
 	 * @return The Song at the new position
 	 */
-	public Song shiftCurrentSong(int delta)
+	public Song shiftCurrentSong(int delta, long position)
 	{
 		synchronized (this) {
 			if (delta == SHIFT_KEEP_SONG) {
 				// void
 			}
 			else if (delta == SHIFT_PREVIOUS_SONG || delta == SHIFT_NEXT_SONG) {
-				shiftCurrentSongInternal(delta);
+				shiftCurrentSongInternal(delta, position);
 			} else {
 				Song song = getSong(0);
 				long currentAlbum = song.albumId;
 				long currentSong = song.id;
 				delta = delta > 0 ? 1 : -1;
 				do {
-					shiftCurrentSongInternal(delta);
+					shiftCurrentSongInternal(delta, position);
 					song = getSong(0);
 				} while (currentAlbum == song.albumId && currentSong != song.id);
 			}
