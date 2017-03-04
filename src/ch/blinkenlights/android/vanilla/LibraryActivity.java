@@ -852,8 +852,9 @@ public class LibraryActivity
 	{
 		switch (item.getItemId()) {
         case MENU_MOOD:
-            final String[] moods = new String[] { "default", "sunday", "other" };
-            int mood = 0;
+            final String[] moods = new String[] { "mood 1", "mood 2", "mood 3",
+                                                  "mood 4", "mood 5"};
+            int mood = Moody.getInstance(this).get_mood();
 
 			AlertDialog.Builder b = new AlertDialog.Builder(this);
 			b.setTitle("Mood");

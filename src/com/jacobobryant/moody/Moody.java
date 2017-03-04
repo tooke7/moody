@@ -259,7 +259,7 @@ public class Moody {
         return r;
     }
 
-    private int get_mood() {
+    public int get_mood() {
 		SharedPreferences settings = PlaybackService.getSettings(context);
 		return settings.getInt(PrefKeys.MOOD, PrefDefaults.MOOD);
     }
