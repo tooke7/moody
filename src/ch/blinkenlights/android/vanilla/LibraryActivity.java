@@ -60,6 +60,7 @@ import android.widget.TextView;
 import android.widget.SearchView;
 import android.util.Log;
 
+import com.jacobobryant.moody.C;
 import com.jacobobryant.moody.Moody;
 
 import java.io.File;
@@ -834,6 +835,7 @@ public class LibraryActivity
 		menu.add(0, MENU_PLAYBACK, 0, R.string.playback_view);
 		menu.add(0, MENU_SEARCH, 0, R.string.search).setIcon(R.drawable.ic_menu_search).setVisible(false);
 		menu.add(0, MENU_SORT, 30, R.string.sort_by).setIcon(R.drawable.ic_menu_sort_alphabetically);
+		menu.add(0, MENU_MOOD, 0, "Mood");
 		return true;
 	}
 
@@ -849,6 +851,28 @@ public class LibraryActivity
 	public boolean onOptionsItemSelected(MenuItem item)
 	{
 		switch (item.getItemId()) {
+        case MENU_MOOD:
+            final String[] moods = new String[] { "default", "sunday", "other" };
+            int mood = 0;
+
+			AlertDialog.Builder b = new AlertDialog.Builder(this);
+			b.setTitle("Mood");
+			b.setSingleChoiceItems(moods, mood, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    Log.d(C.TAG, "Mood: " + moods[which]);
+                    SharedPreferences.Editor editor =
+                            PlaybackService.getSettings(LibraryActivity.this).edit();
+                    editor.putInt(PrefKeys.MOOD, which);
+                    editor.apply();
+                    dialog.dismiss();
+                }
+            });
+			b.setNeutralButton(R.string.done, this);
+			AlertDialog d = b.create();
+			d.show();
+
+            return true;
 		case MENU_SEARCH:
 			mBottomBarControls.showSearch(true);
 			return true;

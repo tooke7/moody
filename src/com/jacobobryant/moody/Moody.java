@@ -1,19 +1,25 @@
 package com.jacobobryant.moody;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.MediaStore;
 import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
+import ch.blinkenlights.android.vanilla.PlaybackService;
+import ch.blinkenlights.android.vanilla.PrefDefaults;
+import ch.blinkenlights.android.vanilla.PrefKeys;
 import ch.blinkenlights.android.vanilla.Song;
 
 import static android.R.attr.key;
@@ -21,7 +27,15 @@ import static android.R.attr.key;
 public class Moody {
     private static Moody instance;
     private Context context;
-    private Map<Metadata, Ratio> ratios;
+    // maps moods (integers) to the ratio data.
+    private Map<Integer, Map<Metadata, Ratio>> ratios;
+    //private Map<Metadata, Ratio> ratios;
+    //private final Map<Metadata, Ratio> skel;
+    private Set<Metadata> library;
+    private List<Metadata> songs;
+    private Metadata random_song;
+    private static final int RANDOM_MOOD = -1;
+    private static final float RANDOM_SIZE = 0.075f;
 
     private Moody() { }
 
@@ -45,25 +59,26 @@ public class Moody {
         SQLiteDatabase db = new Database(context).getWritableDatabase();
         ratios = new HashMap<>();
         db.beginTransaction();
-        Set<String> library = new HashSet<String>(Arrays.asList(
-                    //"It Has Begun",
-                    //"Make a Move",
-                    //"Let It Die (Acoustic)",
-                    //"Pieces",
-                    //"My Demons (Synchronice Remix)",
-                    //"Off With Her Head"
-                    "Paper Wings",
-                    "The Diary Of Jane",
-                    "Crystallize"
-        ));
+        //Set<String> library = new HashSet<String>(Arrays.asList(
+        //            //"It Has Begun",
+        //            //"Make a Move",
+        //            //"Let It Die (Acoustic)",
+        //            //"Pieces",
+        //            //"My Demons (Synchronice Remix)",
+        //            //"Off With Her Head"
+        //            "Paper Wings",
+        //            "The Diary Of Jane",
+        //            "Crystallize"
+        //));
 
+        library = new HashSet<>();
+        songs = new ArrayList<>();
         // get metadata for all the user's songs
         result.moveToPosition(-1);
         while (result.moveToNext()) {
             String title = result.getString(0);
             String artist = result.getString(1);
             String album = result.getString(2);
-            long duration = result.getLong(3);
 
             // limit library for testing
             //Log.d(C.TAG, "artist=" + artist);
@@ -72,13 +87,14 @@ public class Moody {
             //}
 
             // TODO change ON CONFLICT thing to UPDATE?
-            db.execSQL("INSERT INTO songs (artist, album, title, duration) VALUES (?, ?, ?, ?)",
-                    new String[] {artist, album, title, String.valueOf(duration)});
+            db.execSQL("INSERT INTO songs (artist, album, title) VALUES (?, ?, ?)",
+                    new String[] {artist, album, title});
 
             // initialize ratios
             Metadata m = new Metadata(artist, album, title);
+            songs.add(m);
             do {
-                ratios.put(m, new Ratio());
+                library.add(m);
                 m = m.pop();
             } while (m != null);
         }
@@ -89,51 +105,57 @@ public class Moody {
         result.close();
 
         // read in past skip data
-        result = db.rawQuery("SELECT artist, album, title, position, " +
-                "duration FROM songs JOIN events ON songs._id = events.song_id",
-                null);
+        result = db.rawQuery("SELECT artist, album, title, skipped, mood " +
+                "FROM songs JOIN events ON songs._id = events.song_id", null);
         result.moveToPosition(-1);
         while (result.moveToNext()) {
             String artist = result.getString(0);
             String album = result.getString(1);
             String title = result.getString(2);
-            long position = result.getLong(3);
-            long duration = result.getLong(4);
-            update_all(artist, album, title, position, duration);
+            boolean skipped = result.getInt(3) == 1;
+            int mood = result.getInt(4);
+            update_ratios(artist, album, title, skipped, mood);
         }
         result.close();
 
         db.close();
     }
 
-    public void update(Song last_song, long position) {
+    public void update(Song last_song, boolean skipped) {
         if (ratios == null) {
             throw new RuntimeException("populate() hasn't been called");
         }
-        Log.d(C.TAG, "last song: " + last_song.title + ", " +
-                last_song.album + ", " + last_song.artist);
+        //Log.d(C.TAG, "last song: " + last_song.title + ", " +
+        //        last_song.album + ", " + last_song.artist);
 
-        update_all(last_song.artist, last_song.album, last_song.title,
-                position, last_song.duration);
+        // get the current mood
+        int mood;
+        if (random_song != null && random_song.equals(new Metadata(last_song.artist,
+                    last_song.album, last_song.title))) {
+            mood = RANDOM_MOOD;
+            random_song = null;
+        } else {
+            mood = get_mood();
+        }
+        Log.d(C.TAG, "mood: " + mood);
+        update_ratios(last_song.artist, last_song.album, last_song.title,
+                skipped, mood);
 
         // update db
         // TODO do this in one query
         SQLiteDatabase db = new Database(context).getWritableDatabase();
         Cursor result = db.rawQuery(
-                "SELECT _id FROM songs WHERE artist = ? AND album = ? " +
-                "AND title = ?",
-                new String[] {last_song.artist, last_song.album,
-                    last_song.title});
+                "SELECT _id FROM songs WHERE artist = ? AND album = ? AND title = ?",
+                new String[] {last_song.artist, last_song.album, last_song.title});
         int id;
         if (result.getCount() > 0) {
             result.moveToPosition(0);
             id = result.getInt(0);
         } else {
             db.beginTransaction();
-            db.execSQL("INSERT INTO songs (artist, album, title, duration) " +
-                       "VALUES (?, ?, ?, ?)",
-                    new String[] {last_song.artist, last_song.album, last_song.title,
-                        String.valueOf(last_song.duration)});
+            db.execSQL("INSERT INTO songs (artist, album, title) " +
+                       "VALUES (?, ?, ?)",
+                    new String[] {last_song.artist, last_song.album, last_song.title});
             Cursor idCursor = db.rawQuery("SELECT last_insert_rowid()", null);
             idCursor.moveToPosition(0);
             id = idCursor.getInt(0);
@@ -141,11 +163,17 @@ public class Moody {
             db.setTransactionSuccessful();
             db.endTransaction();
         }
-        db.execSQL("INSERT INTO events (song_id, position) VALUES (?, ?)",
-                new String[]{String.valueOf(id), String.valueOf(position)});
+        db.execSQL("INSERT INTO events (song_id, skipped, mood) VALUES (?, ?, ?)",
+                new String[]{String.valueOf(id), String.valueOf(skipped),
+                String.valueOf(mood)});
         result.close();
         db.close();
 
+        // backup the db
+        //Log.d(C.TAG, "backing up the db");
+        //db = new Database(context).getReadableDatabase();
+        //db.execSQL(".backup mycoolbackup.db");
+        //db.close();
     }
 
     public Metadata pick_next() {
@@ -153,15 +181,27 @@ public class Moody {
             throw new RuntimeException("populate() hasn't been called");
         }
 
+        // suggest a random song every now and then for evaluation purposes.
+        if (Math.random() < RANDOM_SIZE) {
+            int item = new Random().nextInt(songs.size());
+            random_song = songs.get(item);
+            Log.d(C.TAG, "suggesting random song: " + random_song);
+            return random_song;
+        } else {
+            random_song = null;
+        }
+
+        Map<Metadata, Ratio> mratios = get_ratios(get_mood());
+
         // calculate the probability for all songs
         List<Probability> probs = new LinkedList<>();
         double probSum = 0;
-        for (Map.Entry<Metadata, Ratio> entry : ratios.entrySet()) {
+        for (Map.Entry<Metadata, Ratio> entry : mratios.entrySet()) {
             Metadata key = entry.getKey();
             if (key.type != Metadata.Type.SONG) {
                 continue;
             }
-            Probability p = new Probability(ratios, key);
+            Probability p = new Probability(mratios, key);
             probSum += p.prob;
             probs.add(p);
         }
@@ -179,24 +219,48 @@ public class Moody {
             x -= prob.prob;
         }
         if (choice == null) {
-            Log.d(C.TAG, "shuffle choice out of range");
+            Log.w(C.TAG, "shuffle choice out of range");
             choice = probs.get(probs.size() - 1).m;
         }
 
         return choice;
     }
 
-    public void update_all(String artist, String album, String title,
-            long position, long duration) {
-        boolean skipped = position / (double)duration < 0.5;
+    private void update_ratios(String artist, String album, String title,
+            boolean skipped, int mood) {
+        Map<Metadata, Ratio> mood_ratios = get_ratios(mood);
         Metadata key = new Metadata(artist, album, title);
+
+        Log.d(C.TAG, "title=" + title + ", skipped=" + skipped);
         do {
             try {
-                ratios.get(key).update(skipped);
+                mood_ratios.get(key).update(skipped);
             } catch (NullPointerException e) {
                 Log.e(C.TAG, "ratio for " + key + " doesn't exist");
             }
             key = key.pop();
         } while (key != null);
+    }
+
+    private Map<Metadata, Ratio> get_ratios(int mood) {
+        Map<Metadata, Ratio> mood_ratios = ratios.get(mood);
+        if (mood_ratios == null) {
+            mood_ratios = create_ratios();
+            ratios.put(mood, mood_ratios);
+        }
+        return mood_ratios;
+    }
+
+    private Map<Metadata, Ratio> create_ratios() {
+        Map<Metadata, Ratio> r = new HashMap<>();
+        for (Metadata m : library) {
+            r.put(m, new Ratio());
+        }
+        return r;
+    }
+
+    private int get_mood() {
+		SharedPreferences settings = PlaybackService.getSettings(context);
+		return settings.getInt(PrefKeys.MOOD, PrefDefaults.MOOD);
     }
 }

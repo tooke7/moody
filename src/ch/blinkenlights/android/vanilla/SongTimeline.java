@@ -620,7 +620,7 @@ public final class SongTimeline {
 	 *
 	 * @param delta -1 to move to the previous song or 1 for the next.
 	 */
-	private void shiftCurrentSongInternal(int delta, long position)
+	private void shiftCurrentSongInternal(int delta, boolean skipped)
 	{
         //Log.d("FOO", "shiftCurrentSongInternal");
         //Log.d("FOO", "getPosition()=" + position);
@@ -653,7 +653,7 @@ public final class SongTimeline {
         //if (false) {
         if (delta == 1) {
             Moody moody = Moody.getInstance(mContext);
-            moody.update(mSongs.get(mCurrentPos), position);
+            moody.update(mSongs.get(mCurrentPos), skipped);
 
             do {
                 Metadata next = moody.pick_next();
@@ -745,21 +745,21 @@ public final class SongTimeline {
 	 * @param delta One of SongTimeline.SHIFT_*.
 	 * @return The Song at the new position
 	 */
-	public Song shiftCurrentSong(int delta, long position)
+	public Song shiftCurrentSong(int delta, boolean skipped)
 	{
 		synchronized (this) {
 			if (delta == SHIFT_KEEP_SONG) {
 				// void
 			}
 			else if (delta == SHIFT_PREVIOUS_SONG || delta == SHIFT_NEXT_SONG) {
-				shiftCurrentSongInternal(delta, position);
+				shiftCurrentSongInternal(delta, skipped);
 			} else {
 				Song song = getSong(0);
 				long currentAlbum = song.albumId;
 				long currentSong = song.id;
 				delta = delta > 0 ? 1 : -1;
 				do {
-					shiftCurrentSongInternal(delta, position);
+					shiftCurrentSongInternal(delta, skipped);
 					song = getSong(0);
 				} while (currentAlbum == song.albumId && currentSong != song.id);
 			}

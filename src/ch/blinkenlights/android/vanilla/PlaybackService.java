@@ -1279,6 +1279,10 @@ public final class PlaybackService extends Service
 		}
 	}
 
+    private Song setCurrentSong(int delta) {
+        return setCurrentSong(delta, true);
+    }
+
 	/**
 	 * Move to the next or previous song or album in the timeline.
 	 *
@@ -1287,7 +1291,7 @@ public final class PlaybackService extends Service
 	 * broadcasts, etc.
 	 * @return The new current song
 	 */
-	private Song setCurrentSong(int delta)
+	private Song setCurrentSong(int delta, boolean skipped)
 	{
 		if (mMediaPlayer == null)
 			return null;
@@ -1295,7 +1299,7 @@ public final class PlaybackService extends Service
 		if (mMediaPlayer.isPlaying())
 			mMediaPlayer.stop();
 
-		Song song = mTimeline.shiftCurrentSong(delta, getPosition());
+		Song song = mTimeline.shiftCurrentSong(delta, skipped);
 		mCurrentSong = song;
 		if (song == null) {
 			if (MediaUtils.isSongAvailable(getApplicationContext())) {
@@ -1390,14 +1394,14 @@ public final class PlaybackService extends Service
 		mHandler.sendMessageDelayed(mHandler.obtainMessage(MSG_UPDATE_PLAYCOUNTS, 1, 0, mCurrentSong), 800);
 
 		if (finishAction(mState) == SongTimeline.FINISH_REPEAT_CURRENT) {
-			setCurrentSong(0);
+			setCurrentSong(0, false);
 		} else if (finishAction(mState) == SongTimeline.FINISH_STOP_CURRENT) {
 			unsetFlag(FLAG_PLAYING);
-			setCurrentSong(+1);
+			setCurrentSong(+1, false);
 		} else if (mTimeline.isEndOfQueue()) {
 			unsetFlag(FLAG_PLAYING);
 		} else {
-			setCurrentSong(+1);
+			setCurrentSong(+1, false);
 		}
 	}
 
