@@ -29,6 +29,10 @@ THE SOFTWARE.
 	<uses-sdk android:minSdkVersion="15" android:targetSdkVersion="24" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
 	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
+    <uses-permission android:name="android.permission.WRITE_SYNC_SETTINGS" />
+    <uses-permission android:name="android.permission.AUTHENTICATE_ACCOUNTS" />
 	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
 	<!-- This is needed for isWiredHeadsetOn() to work in some cases. (bug?) -->
 	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -36,6 +40,35 @@ THE SOFTWARE.
 		android:resizeableActivity="true"
 		android:icon="@drawable/icon"
 		android:label="@string/app_name">
+
+
+        <service android:name="com.jacobobryant.moody.AuthenticatorService">
+            <intent-filter>
+                <action android:name="android.accounts.AccountAuthenticator" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.accounts.AccountAuthenticator"
+                android:resource="@xml/authenticator" />
+        </service>
+        <service
+            android:name="com.jacobobryant.moody.SyncService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.content.SyncAdapter" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.content.SyncAdapter"
+                android:resource="@xml/syncadapter" />
+        </service>
+
+        <provider
+            android:name="com.jacobobryant.moody.StubProvider"
+            android:authorities="com.jacobobryant.moody"
+            android:exported="false"
+            android:syncable="true" />
+
 
 		<meta-data
 		android:name="com.mirrorlink.android.rockscout.allow-offline-access"

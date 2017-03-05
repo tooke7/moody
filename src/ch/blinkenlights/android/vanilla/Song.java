@@ -131,7 +131,7 @@ public class Song implements Comparable<Song> {
 	public int flags;
 
 	/**
-	 * Initialize the song with the specified id. Call populate to fill fields
+	 * Initialize the song with the specified id. Call init to fill fields
 	 * in the song.
 	 */
 	public Song(long id)
@@ -140,7 +140,7 @@ public class Song implements Comparable<Song> {
 	}
 
 	/**
-	 * Initialize the song with the specified id and flags. Call populate to
+	 * Initialize the song with the specified id and flags. Call init to
 	 * fill fields in the song.
 	 */
 	public Song(long id, int flags)

@@ -23,7 +23,7 @@ import android.view.View;
 import android.view.ViewGroup;
 
 /**
- * Base class providing the adapter to populate pages inside of
+ * Base class providing the adapter to init pages inside of
  * a {@link ViewPager}.  You will most likely want to use a more
  * specific implementation of this, such as
  * {@link android.support.v4.app.FragmentPagerAdapter} or

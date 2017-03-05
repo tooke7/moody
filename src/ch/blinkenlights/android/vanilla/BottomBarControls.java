@@ -157,7 +157,7 @@ public class BottomBarControls extends LinearLayout
 		mPopupMenu = (menuMargin() ? new PopupMenu(mContext, menuButton, Gravity.RIGHT) : new PopupMenu(mContext, menuButton));
 		mPopupMenu.setOnMenuItemClickListener(this);
 
-		// Let parent populate the menu
+		// Let parent init the menu
 		mParentMenuConsumer.onCreateOptionsMenu(mPopupMenu.getMenu());
 
 		// The menu is now ready, we an now add all invisible

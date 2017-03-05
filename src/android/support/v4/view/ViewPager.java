@@ -931,7 +931,7 @@ public class ViewPager extends ViewGroup {
         Collections.sort(mItems, COMPARATOR);
 
         if (needPopulate) {
-            // Reset our known page widths; populate will recompute them.
+            // Reset our known page widths; init will recompute them.
             final int childCount = getChildCount();
             for (int i = 0; i < childCount; i++) {
                 final View child = getChildAt(i);
@@ -964,18 +964,18 @@ public class ViewPager extends ViewGroup {
             return;
         }
 
-        // Bail now if we are waiting to populate.  This is to hold off
+        // Bail now if we are waiting to init.  This is to hold off
         // on creating views from the time the user releases their finger to
         // fling to a new position until we have finished the scroll to
         // that position, avoiding glitches from happening at that point.
         if (mPopulatePending) {
-            if (DEBUG) Log.i(TAG, "populate is pending, skipping for now...");
+            if (DEBUG) Log.i(TAG, "init is pending, skipping for now...");
             sortChildDrawingOrder();
             return;
         }
 
-        // Also, don't populate until we are attached to a window.  This is to
-        // avoid trying to populate before we have restored our view hierarchy
+        // Also, don't init until we are attached to a window.  This is to
+        // avoid trying to init before we have restored our view hierarchy
         // state and conflicting with what is restored.
         if (getWindowToken() == null) {
             return;
@@ -1037,7 +1037,7 @@ public class ViewPager extends ViewGroup {
                         mItems.remove(itemIndex);
                         mAdapter.destroyItem(this, pos, ii.object);
                         if (DEBUG) {
-                            Log.i(TAG, "populate() - destroyItem() with pos: " + pos +
+                            Log.i(TAG, "init() - destroyItem() with pos: " + pos +
                                     " view: " + ((View) ii.object));
                         }
                         itemIndex--;
@@ -1071,7 +1071,7 @@ public class ViewPager extends ViewGroup {
                             mItems.remove(itemIndex);
                             mAdapter.destroyItem(this, pos, ii.object);
                             if (DEBUG) {
-                                Log.i(TAG, "populate() - destroyItem() with pos: " + pos +
+                                Log.i(TAG, "init() - destroyItem() with pos: " + pos +
                                         " view: " + ((View) ii.object));
                             }
                             ii = itemIndex < mItems.size() ? mItems.get(itemIndex) : null;

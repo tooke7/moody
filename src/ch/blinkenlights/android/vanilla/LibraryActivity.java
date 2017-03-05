@@ -221,7 +221,7 @@ public class LibraryActivity
 		loadAlbumIntent(getIntent());
 		bindControlButtons();
 
-        Moody.getInstance(this).populate();
+        Moody.getInstance(this).init();
 	}
 
 	/**

@@ -1,9 +1,13 @@
 package com.jacobobryant.moody;
 
+import android.accounts.Account;
+import android.accounts.AccountManager;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
 
@@ -17,6 +21,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
+import ch.blinkenlights.android.vanilla.BuildConfig;
 import ch.blinkenlights.android.vanilla.PlaybackService;
 import ch.blinkenlights.android.vanilla.PrefDefaults;
 import ch.blinkenlights.android.vanilla.PrefKeys;
@@ -36,6 +41,9 @@ public class Moody {
     private Metadata random_song;
     private static final int RANDOM_MOOD = -1;
     private static final float RANDOM_SIZE = 0.075f;
+    public static final String AUTHORITY = "com.jacobobryant.vanilla";
+    public static final String ACCOUNT_TYPE = "com.jacobobryant";
+    public static final String ACCOUNT = "mycoolaccount";
 
     private Moody() { }
 
@@ -47,7 +55,7 @@ public class Moody {
         return instance;
     }
 
-    public void populate() {
+    public void init() {
         final String[] proj = {MediaStore.Audio.Media.TITLE,
                                MediaStore.Audio.Media.ARTIST,
                                MediaStore.Audio.Media.ALBUM,
@@ -119,11 +127,22 @@ public class Moody {
         result.close();
 
         db.close();
+
+        // setup sync adapter
+        final long SYNC_INTERVAL = 60L * 60L * 24L;
+        Account newAccount = new Account(ACCOUNT, ACCOUNT_TYPE);
+        AccountManager accountManager = (AccountManager) context.getSystemService(Context.ACCOUNT_SERVICE);
+        if (accountManager.addAccountExplicitly(newAccount, null, null)) {
+            if (BuildConfig.DEBUG) Log.d(C.TAG, "creating new account");
+            ContentResolver.setIsSyncable(newAccount, AUTHORITY, 1);
+            ContentResolver.setSyncAutomatically(newAccount, AUTHORITY, true);
+        }
+        ContentResolver.addPeriodicSync(newAccount, AUTHORITY, Bundle.EMPTY, SYNC_INTERVAL);
     }
 
     public void update(Song last_song, boolean skipped) {
         if (ratios == null) {
-            throw new RuntimeException("populate() hasn't been called");
+            throw new RuntimeException("init() hasn't been called");
         }
         //Log.d(C.TAG, "last song: " + last_song.title + ", " +
         //        last_song.album + ", " + last_song.artist);
@@ -178,7 +197,7 @@ public class Moody {
 
     public Metadata pick_next() {
         if (ratios == null) {
-            throw new RuntimeException("populate() hasn't been called");
+            throw new RuntimeException("init() hasn't been called");
         }
 
         // suggest a random song every now and then for evaluation purposes.

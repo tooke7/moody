@@ -377,7 +377,7 @@ public final class SongTimeline {
 					cursor.close();
 
 					// The query may have returned zero results or we might 
-					// have failed to populate some songs: Get rid of all
+					// have failed to init some songs: Get rid of all
 					// uninitialized items
 					Iterator<Song> it = songs.iterator();
 					while (it.hasNext()) {

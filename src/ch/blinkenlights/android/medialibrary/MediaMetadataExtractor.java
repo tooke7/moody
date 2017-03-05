@@ -246,7 +246,7 @@ public class MediaMetadataExtractor extends HashMap<String, ArrayList<String>> {
 	}
 
 	/**
-	 * Attempts to populate this instance with tags found in given path
+	 * Attempts to init this instance with tags found in given path
 	 *
 	 * @param path the path to parse
 	 */
