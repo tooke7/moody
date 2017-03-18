@@ -376,6 +376,7 @@ public abstract class PlaybackActivity extends Activity
 	static final int MENU_ADD_TO_PLAYLIST = 17;
 	static final int MENU_SHARE = 18;
 	static final int MENU_MOOD = 19;
+	static final int MENU_TEST = 20;
 
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu)

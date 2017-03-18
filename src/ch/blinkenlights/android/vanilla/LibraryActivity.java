@@ -40,6 +40,7 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.PaintDrawable;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -207,6 +208,8 @@ public class LibraryActivity
 
 		if(PermissionRequestActivity.havePermissions(this) == false) {
 			PermissionRequestActivity.showWarning(this, getIntent());
+		} else {
+			Moody.getInstance(this).init();
 		}
 
 		mVanillaTabLayout = (VanillaTabLayout)findViewById(R.id.sliding_tabs);
@@ -221,7 +224,6 @@ public class LibraryActivity
 		loadAlbumIntent(getIntent());
 		bindControlButtons();
 
-        Moody.getInstance(this).init();
 	}
 
 	/**
@@ -836,6 +838,9 @@ public class LibraryActivity
 		menu.add(0, MENU_SEARCH, 0, R.string.search).setIcon(R.drawable.ic_menu_search).setVisible(false);
 		menu.add(0, MENU_SORT, 30, R.string.sort_by).setIcon(R.drawable.ic_menu_sort_alphabetically);
 		menu.add(0, MENU_MOOD, 0, "Mood");
+		if (BuildConfig.DEBUG) {
+			menu.add(0, MENU_TEST, 0, "Test");
+		}
 		return true;
 	}
 
@@ -873,6 +878,14 @@ public class LibraryActivity
 			AlertDialog d = b.create();
 			d.show();
 
+            return true;
+        case MENU_TEST:
+			AsyncTask.execute(new Runnable() {
+				@Override
+				public void run() {
+					Moody.getInstance(LibraryActivity.this).test();
+				}
+			});
             return true;
 		case MENU_SEARCH:
 			mBottomBarControls.showSearch(true);

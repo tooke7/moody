@@ -71,4 +71,5 @@ public class PrefKeys {
 	public static final String IGNORE_AUDIOFOCUS_LOSS = "ignore_audiofocus_loss";
 	public static final String ENABLE_SCROLL_TO_SONG = "enable_scroll_to_song";
 	public static final String MOOD = "mood";
+	public static final String USER_ID = "user_id";
 }

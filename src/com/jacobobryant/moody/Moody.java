@@ -5,14 +5,17 @@ import android.accounts.AccountManager;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
 
+import java.io.File;
+import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -26,8 +29,6 @@ import ch.blinkenlights.android.vanilla.PlaybackService;
 import ch.blinkenlights.android.vanilla.PrefDefaults;
 import ch.blinkenlights.android.vanilla.PrefKeys;
 import ch.blinkenlights.android.vanilla.Song;
-
-import static android.R.attr.key;
 
 public class Moody {
     private static Moody instance;
@@ -44,6 +45,7 @@ public class Moody {
     public static final String AUTHORITY = "com.jacobobryant.vanilla";
     public static final String ACCOUNT_TYPE = "com.jacobobryant";
     public static final String ACCOUNT = "mycoolaccount";
+    private Account newAccount;
 
     private Moody() { }
 
@@ -56,6 +58,18 @@ public class Moody {
     }
 
     public void init() {
+        // setup sync adapter
+        final long SYNC_INTERVAL = 60L * 60L * 24L;
+        newAccount = new Account(ACCOUNT, ACCOUNT_TYPE);
+        AccountManager accountManager = (AccountManager) context.getSystemService(Context.ACCOUNT_SERVICE);
+        if (accountManager.addAccountExplicitly(newAccount, null, null)) {
+            if (BuildConfig.DEBUG) Log.d(C.TAG, "creating new account");
+            ContentResolver.setIsSyncable(newAccount, AUTHORITY, 1);
+            ContentResolver.setSyncAutomatically(newAccount, AUTHORITY, true);
+        }
+        ContentResolver.addPeriodicSync(newAccount, AUTHORITY, Bundle.EMPTY, SYNC_INTERVAL);
+
+        // read in old data
         final String[] proj = {MediaStore.Audio.Media.TITLE,
                                MediaStore.Audio.Media.ARTIST,
                                MediaStore.Audio.Media.ALBUM,
@@ -67,17 +81,6 @@ public class Moody {
         SQLiteDatabase db = new Database(context).getWritableDatabase();
         ratios = new HashMap<>();
         db.beginTransaction();
-        //Set<String> library = new HashSet<String>(Arrays.asList(
-        //            //"It Has Begun",
-        //            //"Make a Move",
-        //            //"Let It Die (Acoustic)",
-        //            //"Pieces",
-        //            //"My Demons (Synchronice Remix)",
-        //            //"Off With Her Head"
-        //            "Paper Wings",
-        //            "The Diary Of Jane",
-        //            "Crystallize"
-        //));
 
         library = new HashSet<>();
         songs = new ArrayList<>();
@@ -87,12 +90,6 @@ public class Moody {
             String title = result.getString(0);
             String artist = result.getString(1);
             String album = result.getString(2);
-
-            // limit library for testing
-            //Log.d(C.TAG, "artist=" + artist);
-            //if (!library.contains(title)) {
-            //    continue;
-            //}
 
             // TODO change ON CONFLICT thing to UPDATE?
             db.execSQL("INSERT INTO songs (artist, album, title) VALUES (?, ?, ?)",
@@ -106,7 +103,6 @@ public class Moody {
                 m = m.pop();
             } while (m != null);
         }
-        //Log.d(C.TAG, "ratios.size()=" + String.valueOf(ratios.size()));
 
         db.setTransactionSuccessful();
         db.endTransaction();
@@ -120,24 +116,16 @@ public class Moody {
             String artist = result.getString(0);
             String album = result.getString(1);
             String title = result.getString(2);
-            boolean skipped = result.getInt(3) == 1;
+
+            //boolean skipped = (result.getInt(3) == 1);
+            boolean skipped = result.getString(3).equals("true");
             int mood = result.getInt(4);
+
             update_ratios(artist, album, title, skipped, mood);
         }
         result.close();
 
         db.close();
-
-        // setup sync adapter
-        final long SYNC_INTERVAL = 60L * 60L * 24L;
-        Account newAccount = new Account(ACCOUNT, ACCOUNT_TYPE);
-        AccountManager accountManager = (AccountManager) context.getSystemService(Context.ACCOUNT_SERVICE);
-        if (accountManager.addAccountExplicitly(newAccount, null, null)) {
-            if (BuildConfig.DEBUG) Log.d(C.TAG, "creating new account");
-            ContentResolver.setIsSyncable(newAccount, AUTHORITY, 1);
-            ContentResolver.setSyncAutomatically(newAccount, AUTHORITY, true);
-        }
-        ContentResolver.addPeriodicSync(newAccount, AUTHORITY, Bundle.EMPTY, SYNC_INTERVAL);
     }
 
     public void update(Song last_song, boolean skipped) {
@@ -147,16 +135,16 @@ public class Moody {
         //Log.d(C.TAG, "last song: " + last_song.title + ", " +
         //        last_song.album + ", " + last_song.artist);
 
-        // get the current mood
-        int mood;
+        // get the current algorithm. 0 means random.
+        int algorithm;
         if (random_song != null && random_song.equals(new Metadata(last_song.artist,
                     last_song.album, last_song.title))) {
-            mood = RANDOM_MOOD;
+            algorithm = 0;
             random_song = null;
         } else {
-            mood = get_mood();
+            algorithm = C.ALG_VERSION;
         }
-        Log.d(C.TAG, "mood: " + mood);
+        int mood = get_mood();
         update_ratios(last_song.artist, last_song.album, last_song.title,
                 skipped, mood);
 
@@ -182,17 +170,11 @@ public class Moody {
             db.setTransactionSuccessful();
             db.endTransaction();
         }
-        db.execSQL("INSERT INTO events (song_id, skipped, mood) VALUES (?, ?, ?)",
-                new String[]{String.valueOf(id), String.valueOf(skipped),
-                String.valueOf(mood)});
+        db.execSQL("INSERT INTO events (song_id, skipped, mood, algorithm) VALUES (?, ?, ?, ?)",
+                new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
+                String.valueOf(mood), String.valueOf(algorithm)});
         result.close();
         db.close();
-
-        // backup the db
-        //Log.d(C.TAG, "backing up the db");
-        //db = new Database(context).getReadableDatabase();
-        //db.execSQL(".backup mycoolbackup.db");
-        //db.close();
     }
 
     public Metadata pick_next() {
@@ -281,5 +263,17 @@ public class Moody {
     public int get_mood() {
 		SharedPreferences settings = PlaybackService.getSettings(context);
 		return settings.getInt(PrefKeys.MOOD, PrefDefaults.MOOD);
+    }
+
+    public void test() {
+        //try {
+            Log.d(C.TAG, "begin test");
+
+            SyncAdapter.sync(context);
+
+            Log.d(C.TAG, "finish test");
+        //} catch (IOException e) {
+        //    throw new RuntimeException(e);
+        //}
     }
 }

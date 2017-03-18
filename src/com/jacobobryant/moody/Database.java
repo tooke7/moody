@@ -24,12 +24,13 @@ public class Database extends SQLiteOpenHelper {
                    "song_id INTEGER, " +
                    "skipped INTEGER, " +
                    "mood INTEGER, " +
+                   "algorithm INTEGER, " +
                    "time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
                    "FOREIGN KEY (song_id) REFERENCES songs(_id))");
     }
 
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        //if (oldVersion == 2) {
+        //if (oldVersion == 4) {
         //    db.execSQL("ALTER TABLE events ADD COLUMN mood INTEGER");
         //    db.execSQL("UPDATE events SET mood = 0 WHERE mood IS NULL");
         //    oldVersion++;

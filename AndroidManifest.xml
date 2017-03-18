@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-	package="ch.blinkenlights.android.vanilla"
+	package="com.jacobobryant.moody"
 	android:versionName="1.0.48"
 	android:versionCode="10480"
 	android:installLocation="auto">

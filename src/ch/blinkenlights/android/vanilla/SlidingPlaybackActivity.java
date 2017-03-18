@@ -122,7 +122,7 @@ public class SlidingPlaybackActivity extends PlaybackActivity
 		if (mMenu == null)
 			mMenu = menu;
 
-		menu.add(0, MENU_SHOW_QUEUE, 20, R.string.show_queue);
+		//menu.add(0, MENU_SHOW_QUEUE, 20, R.string.show_queue);
 		menu.add(0, MENU_HIDE_QUEUE, 20, R.string.hide_queue);
 		menu.add(0, MENU_CLEAR_QUEUE, 20, R.string.dequeue_rest);
 		menu.add(0, MENU_EMPTY_QUEUE, 20, R.string.empty_the_queue);

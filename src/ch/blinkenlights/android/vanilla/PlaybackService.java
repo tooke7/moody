@@ -1393,16 +1393,17 @@ public final class PlaybackService extends Service
 		// Count this song as played
 		mHandler.sendMessageDelayed(mHandler.obtainMessage(MSG_UPDATE_PLAYCOUNTS, 1, 0, mCurrentSong), 800);
 
-		if (finishAction(mState) == SongTimeline.FINISH_REPEAT_CURRENT) {
-			setCurrentSong(0, false);
-		} else if (finishAction(mState) == SongTimeline.FINISH_STOP_CURRENT) {
-			unsetFlag(FLAG_PLAYING);
-			setCurrentSong(+1, false);
-		} else if (mTimeline.isEndOfQueue()) {
-			unsetFlag(FLAG_PLAYING);
-		} else {
-			setCurrentSong(+1, false);
-		}
+		//if (finishAction(mState) == SongTimeline.FINISH_REPEAT_CURRENT) {
+		//	setCurrentSong(0, false);
+		//} else if (finishAction(mState) == SongTimeline.FINISH_STOP_CURRENT) {
+		//	unsetFlag(FLAG_PLAYING);
+		//	setCurrentSong(+1, false);
+		//} else if (mTimeline.isEndOfQueue()) {
+		//	unsetFlag(FLAG_PLAYING);
+		//} else {
+		//	setCurrentSong(+1, false);
+		//}
+		setCurrentSong(1, false);
 	}
 
 	@Override

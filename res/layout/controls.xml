@@ -29,7 +29,8 @@ THE SOFTWARE.
 		android:background="?android:attr/selectableItemBackground"
 		android:scaleType="fitCenter"
 		android:src="@drawable/shuffle_inactive"
-		android:contentDescription="@string/cycle_shuffle_mode" />
+		android:contentDescription="@string/cycle_shuffle_mode"
+		android:visibility="gone" />
 	<ch.blinkenlights.android.vanilla.VanillaImageButton
 		android:id="@+id/previous"
 		android:layout_height="fill_parent"
@@ -65,5 +66,6 @@ THE SOFTWARE.
 		android:background="?android:attr/selectableItemBackground"
 		android:scaleType="fitCenter"
 		android:src="@drawable/repeat_inactive"
-		android:contentDescription="@string/cycle_repeat_mode" />
+		android:contentDescription="@string/cycle_repeat_mode"
+		android:visibility="gone" />
 </merge>

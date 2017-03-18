@@ -4,15 +4,39 @@ import android.accounts.Account;
 import android.content.AbstractThreadedSyncAdapter;
 import android.content.ContentProviderClient;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.SyncResult;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
+import android.provider.MediaStore;
 import android.util.Log;
 
 import com.jacobobryant.moody.C;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Map;
+import java.util.UUID;
+import org.apache.commons.io.FileUtils;
 
 import javax.net.ssl.SSLContext;
+
+import ch.blinkenlights.android.vanilla.PrefKeys;
 
 public class SyncAdapter extends AbstractThreadedSyncAdapter {
     Context context;
@@ -46,48 +70,65 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
                               ContentProviderClient provider, SyncResult syncResult) {
         try {
             Log.d(C.TAG, "onPerformSync()");
+            sync(context);
         } catch (Exception e) {
             //ACRA.getErrorReporter().handleException(e);
         }
     }
 
+    public static void sync(Context context) {
+        try {
+            URL url;
+            try {
+                url = new URL(C.SERVER + "/upload/" + getUserId(context));
+            } catch (MalformedURLException e) {
+                throw new RuntimeException(e);
+            }
 
-    //String upload(String json) throws IOException {
-    //    URL url;
-    //    try {
-    //        url = new URL(C.SERVER + "/upload");
-    //    } catch (MalformedURLException e) {
-    //        throw new RuntimeException(e);
-    //    }
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
-    //    HttpsURLConnection conn = makeConnection(url);
+            // set up request
+            conn.setRequestProperty("Content-Type", "binary/octet-stream");
+            conn.setRequestProperty("Connection", "close");
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setDoInput(true);
 
-    //    // set up request
-    //    conn.setRequestProperty("Content-Type", "application/json");
-    //    conn.setRequestProperty("Connection", "close");
-    //    conn.setRequestMethod("POST");
-    //    conn.setDoOutput(true);
-    //    conn.setDoInput(true);
+            // send request
+            BufferedOutputStream os = new BufferedOutputStream(conn.getOutputStream());
+            File db = new File(context.getDatabasePath("moody.db").getPath());
+            byte[] data = FileUtils.readFileToByteArray(db);
+            Log.d(C.TAG, "data.length: " + data.length);
+            os.write(data);
+            os.close();
 
-    //    // send request
-    //    OutputStream os = conn.getOutputStream();
-    //    BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
-    //    writer.write(json);
-    //    writer.flush();
-    //    writer.close();
-    //    os.close();
+            // receive response
+            StringBuilder result = new StringBuilder();
+            BufferedReader rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+            String line;
+            while ((line = rd.readLine()) != null) {
+                result.append(line);
+            }
+            rd.close();
 
-    //    // receive response
-    //    StringBuilder result = new StringBuilder();
-    //    BufferedReader rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-    //    String line;
-    //    while ((line = rd.readLine()) != null) {
-    //        result.append(line);
-    //    }
-    //    rd.close();
+            Log.d(C.TAG, "finished sending data");
+        } catch (IOException e) {
+            Log.e(C.TAG, e.getMessage());
+        }
+    }
 
-    //    return result.toString();
-    //}
+    private static String getUserId(Context context) {
+        SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(context);
+        String userId = settings.getString(PrefKeys.USER_ID, "");
+        if (!userId.isEmpty()) {
+            return userId;
+        }
+        userId = UUID.randomUUID().toString();
+        SharedPreferences.Editor editor = settings.edit();
+        editor.putString(PrefKeys.USER_ID, userId);
+        editor.commit();
+        return userId;
+    }
 
     //SSLContext makeContext() throws CertificateException, IOException, KeyStoreException,
     //        NoSuchAlgorithmException, KeyManagementException, NoSuchProviderException {
