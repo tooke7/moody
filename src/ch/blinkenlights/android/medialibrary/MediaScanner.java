@@ -17,7 +17,7 @@
 
 package ch.blinkenlights.android.medialibrary;
 
-import ch.blinkenlights.android.vanilla.R;
+import com.jacobobryant.moody.vanilla.R;
 
 import android.app.Notification;
 import android.app.NotificationManager;

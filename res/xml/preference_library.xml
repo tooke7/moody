@@ -27,16 +27,16 @@ THE SOFTWARE.
 		android:title="@string/tabs"
 		android:summary="@string/customize_tab_order">
 		<intent
-			android:targetPackage="ch.blinkenlights.android.vanilla"
-			android:targetClass="ch.blinkenlights.android.vanilla.TabOrderActivity" />
+			android:targetPackage="com.jacobobryant.moody.vanilla"
+			android:targetClass="com.jacobobryant.moody.vanilla.TabOrderActivity" />
 	</PreferenceScreen>
-	<ch.blinkenlights.android.vanilla.ListPreferenceSummary
+	<com.jacobobryant.moody.vanilla.ListPreferenceSummary
 		android:key="default_action_int"
 		android:title="@string/default_action_title"
 		android:entries="@array/default_action_entries"
 		android:entryValues="@array/default_action_entry_values"
 		android:defaultValue="6" />
-	<ch.blinkenlights.android.vanilla.ListPreferenceSummary
+	<com.jacobobryant.moody.vanilla.ListPreferenceSummary
 		android:key="default_playlist_action"
 		android:title="@string/default_playlist_action_title"
 		android:entries="@array/default_playlist_action_entries"
@@ -51,7 +51,7 @@ THE SOFTWARE.
 		android:title="@string/filebrowser_start"
 		android:summary="@string/customize_filebrowser_start">
 		<intent
-			android:targetPackage="ch.blinkenlights.android.vanilla"
-			android:targetClass="ch.blinkenlights.android.vanilla.FilebrowserStartActivity" />
+			android:targetPackage="com.jacobobryant.moody.vanilla"
+			android:targetClass="com.jacobobryant.moody.vanilla.FilebrowserStartActivity" />
 	</PreferenceScreen>
 </PreferenceScreen>

@@ -6,37 +6,22 @@ import android.content.ContentProviderClient;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.SyncResult;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
-import android.provider.MediaStore;
 import android.util.Log;
-
-import com.jacobobryant.moody.C;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Map;
 import java.util.UUID;
 import org.apache.commons.io.FileUtils;
 
-import javax.net.ssl.SSLContext;
-
-import ch.blinkenlights.android.vanilla.PrefKeys;
+import com.jacobobryant.moody.vanilla.PrefKeys;
 
 public class SyncAdapter extends AbstractThreadedSyncAdapter {
     Context context;

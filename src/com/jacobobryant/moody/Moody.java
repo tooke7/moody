@@ -5,16 +5,12 @@ import android.accounts.AccountManager;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -24,11 +20,11 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-import ch.blinkenlights.android.vanilla.BuildConfig;
-import ch.blinkenlights.android.vanilla.PlaybackService;
-import ch.blinkenlights.android.vanilla.PrefDefaults;
-import ch.blinkenlights.android.vanilla.PrefKeys;
-import ch.blinkenlights.android.vanilla.Song;
+import com.jacobobryant.moody.vanilla.BuildConfig;
+import com.jacobobryant.moody.vanilla.PlaybackService;
+import com.jacobobryant.moody.vanilla.PrefDefaults;
+import com.jacobobryant.moody.vanilla.PrefKeys;
+import com.jacobobryant.moody.vanilla.Song;
 
 public class Moody {
     private static Moody instance;
@@ -42,7 +38,7 @@ public class Moody {
     private Metadata random_song;
     private static final int RANDOM_MOOD = -1;
     private static final float RANDOM_SIZE = 0.075f;
-    public static final String AUTHORITY = "com.jacobobryant.vanilla";
+    public static final String AUTHORITY = "com.jacobobryant.com.jacobobryant.moody.vanilla";
     public static final String ACCOUNT_TYPE = "com.jacobobryant";
     public static final String ACCOUNT = "mycoolaccount";
     private Account newAccount;

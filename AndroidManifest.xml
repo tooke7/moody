@@ -22,11 +22,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-	package="com.jacobobryant.moody"
+	package="com.jacobobryant.moody.vanilla"
 	android:versionName="1.0.48"
 	android:versionCode="10480"
 	android:installLocation="auto">
-	<uses-sdk android:minSdkVersion="15" android:targetSdkVersion="24" />
+	<uses-sdk android:minSdkVersion="16" android:targetSdkVersion="24" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
 	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.INTERNET" />
@@ -38,7 +38,7 @@ THE SOFTWARE.
 	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 	<application
 		android:resizeableActivity="true"
-		android:icon="@drawable/icon"
+        android:icon="@mipmap/ic_launcher"
 		android:label="@string/app_name">
 
 
@@ -75,10 +75,10 @@ THE SOFTWARE.
 		android:value="true" />
 
 		<activity
-			android:name="FullPlaybackActivity"
+			android:name=".FullPlaybackActivity"
 			android:launchMode="singleTask" />
 		<activity
-			android:name="LibraryActivity"
+			android:name=".LibraryActivity"
 			android:theme="@style/Library"
 			android:launchMode="singleTask">
 			<intent-filter>
@@ -89,10 +89,10 @@ THE SOFTWARE.
 			</intent-filter>
 		</activity>
 		<activity
-			android:name="PlaylistActivity"
+			android:name=".PlaylistActivity"
 			android:launchMode="singleTask" />
 		<activity
-			android:name="MiniPlaybackActivity"
+			android:name=".MiniPlaybackActivity"
 			android:theme="@style/PopupDialog"
 			android:excludeFromRecents="true"
 			android:launchMode="singleInstance" />
@@ -156,18 +156,18 @@ THE SOFTWARE.
 				android:name="android.appwidget.provider"
 				android:resource="@xml/widget_d" />
 		</receiver>
-		<receiver android:name="MediaButtonReceiver" >
+		<receiver android:name=".MediaButtonReceiver" >
 			<intent-filter android:priority="999">
 				<action android:name="android.intent.action.MEDIA_BUTTON" />
 			</intent-filter>
 		</receiver>
-		<service android:name="PlaybackService">
+		<service android:name=".PlaybackService">
 			<intent-filter>
-				<action android:name="ch.blinkenlights.android.vanilla.action.PLAY" />
-				<action android:name="ch.blinkenlights.android.vanilla.action.PAUSE" />
-				<action android:name="ch.blinkenlights.android.vanilla.action.TOGGLE_PLAYBACK" />
-				<action android:name="ch.blinkenlights.android.vanilla.action.NEXT_SONG" />
-				<action android:name="ch.blinkenlights.android.vanilla.action.PREVIOUS_SONG" />
+				<action android:name="com.jacobobryant.moody.vanilla.action.PLAY" />
+				<action android:name="com.jacobobryant.moody.vanilla.action.PAUSE" />
+				<action android:name="com.jacobobryant.moody.vanilla.action.TOGGLE_PLAYBACK" />
+				<action android:name="com.jacobobryant.moody.vanilla.action.NEXT_SONG" />
+				<action android:name="com.jacobobryant.moody.vanilla.action.PREVIOUS_SONG" />
 			</intent-filter>
 		</service>
 
@@ -180,16 +180,16 @@ THE SOFTWARE.
 		</service>
 
 		<activity
-			android:name="PreferencesActivity" />
+			android:name=".PreferencesActivity" />
 		<activity
-			android:name="TabOrderActivity" />
+			android:name=".TabOrderActivity" />
 		<activity
-			android:name="FilebrowserStartActivity" />
+			android:name=".FilebrowserStartActivity" />
 		<activity
-			android:name="PermissionRequestActivity"
+			android:name=".PermissionRequestActivity"
 			android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
-		<activity android:name="AudioPickerActivity" android:theme="@style/PopupDialog"
+		<activity android:name=".AudioPickerActivity" android:theme="@style/PopupDialog"
 			android:excludeFromRecents="true" android:exported="true" >
 			<intent-filter>
 				<action android:name="android.intent.action.VIEW" />
