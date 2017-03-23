@@ -49,6 +49,5 @@ android {
 }
 
 dependencies {
-    compile 'org.apache.commons:commons-lang3:3.5'
-    compile 'org.apache.directory.studio:org.apache.commons.io:2.4'
+    compile 'commons-io:commons-io:2.4'
 }

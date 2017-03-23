@@ -23,10 +23,8 @@
 
 package com.jacobobryant.moody.vanilla;
 
-import ch.blinkenlights.android.medialibrary.MediaMetadataExtractor;
-
-import java.util.ArrayList;
-
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -42,8 +40,10 @@ import android.widget.LinearLayout;
 import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
-import android.app.AlertDialog;
-import android.content.DialogInterface;
+
+import java.util.ArrayList;
+
+import ch.blinkenlights.android.medialibrary.MediaMetadataExtractor;
 
 /**
  * The primary playback screen with playback controls and large cover display.
@@ -303,10 +303,10 @@ public class FullPlaybackActivity extends SlidingPlaybackActivity
 		//menu.add(0, MENU_ENQUEUE_GENRE, 30, R.string.enqueue_current_genre);
 		//menu.add(0, MENU_ADD_TO_PLAYLIST, 30, R.string.add_to_playlist);
 		menu.add(0, MENU_SHARE, 30, R.string.share);
-		mFavorites = menu.add(0, MENU_SONG_FAVORITE, 0, R.string.add_to_favorites).setIcon(R.drawable.btn_rating_star_off_mtrl_alpha).setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+		//mFavorites = menu.add(0, MENU_SONG_FAVORITE, 0, R.string.add_to_favorites).setIcon(R.drawable//.btn_rating_star_off_mtrl_alpha).setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_IF_ROOM);
 
 		// ensure that mFavorites is updated
-		mHandler.sendEmptyMessage(MSG_LOAD_FAVOURITE_INFO);
+		//mHandler.sendEmptyMessage(MSG_LOAD_FAVOURITE_INFO);
 		return true;
 	}
 

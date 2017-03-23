@@ -41,6 +41,7 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
     }
 
     void init() {
+        Log.d(C.TAG, "SyncAdapter.init()");
         //try {
         //    this.sslContext = makeContext();
         //} catch (CertificateException | IOException | KeyStoreException |
@@ -58,6 +59,7 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
             sync(context);
         } catch (Exception e) {
             //ACRA.getErrorReporter().handleException(e);
+            Log.e(C.TAG, "couldn't upload db", e);
         }
     }
 
@@ -114,50 +116,4 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         editor.commit();
         return userId;
     }
-
-    //SSLContext makeContext() throws CertificateException, IOException, KeyStoreException,
-    //        NoSuchAlgorithmException, KeyManagementException, NoSuchProviderException {
-    //    // Load CAs from an InputStream
-    //    CertificateFactory cf = CertificateFactory.getInstance("X.509");
-    //    InputStream caInput = new BufferedInputStream(
-    //            this.context.getAssets().open("jacobobryant.com.crt"));
-
-    //    Certificate ca;
-    //    try {
-    //        ca = cf.generateCertificate(caInput);
-    //    } finally {
-    //        caInput.close();
-    //    }
-
-    //    // Create a KeyStore containing our trusted CAs
-    //    String keyStoreType = KeyStore.getDefaultType();
-    //    KeyStore keyStore = KeyStore.getInstance(keyStoreType);
-    //    keyStore.load(null, null);
-    //    keyStore.setCertificateEntry("ca", ca);
-
-    //    // Create a TrustManager that trusts the CAs in our KeyStore
-    //    String tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
-    //    TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
-    //    tmf.init(keyStore);
-
-    //    // Create an SSLContext that uses our TrustManager
-    //    SSLContext context = SSLContext.getInstance("TLS");
-    //    context.init(null, tmf.getTrustManagers(), null);
-    //    return context;
-    //}
-
-    //HttpsURLConnection makeConnection(URL url) throws IOException {
-    //    HostnameVerifier hostnameVerifier = new HostnameVerifier() {
-    //        @Override
-    //        public boolean verify(String hostname, SSLSession session) {
-    //            // hee hee hee
-    //            return true;
-    //        }
-    //    };
-
-    //    HttpsURLConnection urlConnection = (HttpsURLConnection) url.openConnection();
-    //    urlConnection.setSSLSocketFactory(this.sslContext.getSocketFactory());
-    //    urlConnection.setHostnameVerifier(hostnameVerifier);
-    //    return urlConnection;
-    //}
 }

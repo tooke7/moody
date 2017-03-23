@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <sync-adapter
         xmlns:android="http://schemas.android.com/apk/res/android"
-        android:contentAuthority="com.jacobobryant.moody"
+        android:contentAuthority="com.jacobobryant.moody.vanilla"
         android:accountType="com.jacobobryant"
         android:userVisible="true"
         android:supportsUploading="true"

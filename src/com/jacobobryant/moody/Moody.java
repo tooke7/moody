@@ -38,7 +38,7 @@ public class Moody {
     private Metadata random_song;
     private static final int RANDOM_MOOD = -1;
     private static final float RANDOM_SIZE = 0.075f;
-    public static final String AUTHORITY = "com.jacobobryant.com.jacobobryant.moody.vanilla";
+    public static final String AUTHORITY = "com.jacobobryant.moody.vanilla";
     public static final String ACCOUNT_TYPE = "com.jacobobryant";
     public static final String ACCOUNT = "mycoolaccount";
     private Account newAccount;
@@ -55,7 +55,8 @@ public class Moody {
 
     public void init() {
         // setup sync adapter
-        final long SYNC_INTERVAL = 60L * 60L * 24L;
+        //final long SYNC_INTERVAL = 60L * 60L * 24L;
+        final long SYNC_INTERVAL = 60L * 60L;
         newAccount = new Account(ACCOUNT, ACCOUNT_TYPE);
         AccountManager accountManager = (AccountManager) context.getSystemService(Context.ACCOUNT_SERVICE);
         if (accountManager.addAccountExplicitly(newAccount, null, null)) {
@@ -63,6 +64,7 @@ public class Moody {
             ContentResolver.setIsSyncable(newAccount, AUTHORITY, 1);
             ContentResolver.setSyncAutomatically(newAccount, AUTHORITY, true);
         }
+        Log.d(C.TAG, "setting periodic sync: " + SYNC_INTERVAL);
         ContentResolver.addPeriodicSync(newAccount, AUTHORITY, Bundle.EMPTY, SYNC_INTERVAL);
 
         // read in old data
