@@ -37,12 +37,11 @@ public class Moody {
     private List<Metadata> songs;
     private Metadata random_song;
     private static final int RANDOM_MOOD = -1;
-    private static final float RANDOM_SIZE = 0.075f;
     public static final String AUTHORITY = "com.jacobobryant.moody.vanilla";
     public static final String ACCOUNT_TYPE = "com.jacobobryant";
     public static final String ACCOUNT = "moodyaccount";
     private Account newAccount;
-    //private Recommender rec;
+    private Recommender rec;
 
     private Moody() { }
 
@@ -107,9 +106,10 @@ public class Moody {
         db.setTransactionSuccessful();
         db.endTransaction();
         result.close();
+        rec = new Recommender(songs);
 
         // read in past skip data
-        result = db.rawQuery("SELECT artist, album, title, skipped, mood " +
+        result = db.rawQuery("SELECT artist, album, title, skipped, mood, time " +
                 "FROM songs JOIN events ON songs._id = events.song_id", null);
         result.moveToPosition(-1);
         while (result.moveToNext()) {
@@ -120,14 +120,16 @@ public class Moody {
             boolean skipped = (result.getInt(3) == 1);
             //boolean skipped = result.getString(3).equals("true");
             int mood = result.getInt(4);
+            String time = result.getString(5);
 
+            Event event = new Event(artist, album, title, skipped, time);
+            rec.add_event(artist, album, title, skipped, time);
             update_ratios(artist, album, title, skipped, mood);
         }
         result.close();
 
         db.close();
 
-        //rec = new Recommender(songs);
     }
 
     public void update(Song last_song, boolean skipped) {
@@ -147,6 +149,7 @@ public class Moody {
             algorithm = C.ALG_VERSION;
         }
         int mood = get_mood();
+        rec.add_event(last_song.artist, last_song.album, last_song.title, skipped);
         update_ratios(last_song.artist, last_song.album, last_song.title,
                 skipped, mood);
 
@@ -180,18 +183,21 @@ public class Moody {
     }
 
     public Metadata pick_next() {
+        float CONTROL_PROB = 0.075f;
+        float OLD_PROB = CONTROL_PROB + (1.0 - CONTROL_PROB) / 2;
         if (ratios == null) {
             throw new RuntimeException("init() hasn't been called");
         }
 
         // suggest a random song every now and then for evaluation purposes.
-        if (Math.random() < RANDOM_SIZE) {
+        float x = Math.random();
+        if (x < CONTROL_PROB) {
             int item = new Random().nextInt(songs.size());
             random_song = songs.get(item);
             Log.d(C.TAG, "suggesting random song: " + random_song);
             return random_song;
-        } else {
-            random_song = null;
+        } else if x >= OLD_PROB {
+            return rec.pick_next();
         }
 
         Map<Metadata, Ratio> mratios = get_ratios(get_mood());
