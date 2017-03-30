@@ -40,8 +40,9 @@ public class Moody {
     private static final float RANDOM_SIZE = 0.075f;
     public static final String AUTHORITY = "com.jacobobryant.moody.vanilla";
     public static final String ACCOUNT_TYPE = "com.jacobobryant";
-    public static final String ACCOUNT = "mycoolaccount";
+    public static final String ACCOUNT = "moodyaccount";
     private Account newAccount;
+    //private Recommender rec;
 
     private Moody() { }
 
@@ -54,9 +55,10 @@ public class Moody {
     }
 
     public void init() {
+        Log.d(C.TAG, "Moody.init()");
+
         // setup sync adapter
-        //final long SYNC_INTERVAL = 60L * 60L * 24L;
-        final long SYNC_INTERVAL = 60L * 60L;
+        final long SYNC_INTERVAL = 60L * 60L * 24L;
         newAccount = new Account(ACCOUNT, ACCOUNT_TYPE);
         AccountManager accountManager = (AccountManager) context.getSystemService(Context.ACCOUNT_SERVICE);
         if (accountManager.addAccountExplicitly(newAccount, null, null)) {
@@ -115,8 +117,8 @@ public class Moody {
             String album = result.getString(1);
             String title = result.getString(2);
 
-            //boolean skipped = (result.getInt(3) == 1);
-            boolean skipped = result.getString(3).equals("true");
+            boolean skipped = (result.getInt(3) == 1);
+            //boolean skipped = result.getString(3).equals("true");
             int mood = result.getInt(4);
 
             update_ratios(artist, album, title, skipped, mood);
@@ -124,6 +126,8 @@ public class Moody {
         result.close();
 
         db.close();
+
+        //rec = new Recommender(songs);
     }
 
     public void update(Song last_song, boolean skipped) {
