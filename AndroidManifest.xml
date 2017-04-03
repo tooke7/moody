@@ -23,8 +23,8 @@ THE SOFTWARE.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
 	package="com.jacobobryant.moody.vanilla"
-	android:versionName="1.0.3"
-	android:versionCode="10483"
+	android:versionName="1.0.5"
+	android:versionCode="10485"
 	android:installLocation="auto">
 	<uses-sdk android:minSdkVersion="15" android:targetSdkVersion="24" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -98,7 +98,7 @@ THE SOFTWARE.
 			android:launchMode="singleInstance" />
 		<receiver
 			android:name=".OneCellWidget"
-			android:label="Moody Music 1x1">
+			android:label="Smart Shuffle 1x1">
 			<intent-filter>
 				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
 			</intent-filter>
@@ -108,7 +108,7 @@ THE SOFTWARE.
 		</receiver>
 		<receiver
 			android:name=".FourLongWidget"
-			android:label="Moody Music 4x1 A">
+			android:label="Smart Shuffle 4x1 A">
 			<intent-filter>
 				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
 			</intent-filter>
@@ -118,7 +118,7 @@ THE SOFTWARE.
 		</receiver>
 		<receiver
 			android:name=".FourWhiteWidget"
-			android:label="Moody Music 4x1 White">
+			android:label="Smart Shuffle 4x1 White">
 			<intent-filter>
 				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
 			</intent-filter>
@@ -128,7 +128,7 @@ THE SOFTWARE.
 		</receiver>
 		<receiver
 			android:name=".WidgetE"
-			android:label="Moody Music 4x1 B">
+			android:label="Smart Shuffle 4x1 B">
 			<intent-filter>
 				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
 			</intent-filter>
@@ -138,7 +138,7 @@ THE SOFTWARE.
 		</receiver>
 		<receiver
 			android:name=".FourSquareWidget"
-			android:label="Moody Music 2x2 A">
+			android:label="Smart Shuffle 2x2 A">
 			<intent-filter>
 				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
 			</intent-filter>
@@ -148,7 +148,7 @@ THE SOFTWARE.
 		</receiver>
 		<receiver
 			android:name=".WidgetD"
-			android:label="Moody Music 2x2 B">
+			android:label="Smart Shuffle 2x2 B">
 			<intent-filter>
 				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
 			</intent-filter>
