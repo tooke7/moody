@@ -1,7 +1,9 @@
 package com.jacobobryant.moody;
 
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import static com.jacobobryant.moody.Metadata.Type.*;
 
@@ -33,6 +35,10 @@ public class Metadata {
         this.artist = artist;
     }
 
+    public Metadata(Map<String, String> m) {
+        this(m.get("artist"), m.get("album"), m.get("title"));
+    }
+
     public Metadata() {
         this.type = GLOBAL;
     }
@@ -62,6 +68,15 @@ public class Metadata {
             }
         }
         return args.toArray(new String[args.size()]);
+    }
+
+
+    public Map<String, String> toMap() {
+        Map<String, String> foo = new HashMap<>();
+        foo.put("artist", artist);
+        foo.put("album", album);
+        foo.put("title", title);
+        return foo;
     }
 
     @Override

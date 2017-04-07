@@ -50,5 +50,5 @@ android {
 
 dependencies {
     compile 'commons-io:commons-io:2.4'
-    compile 'org.clojure:clojure:1.9.0-alpha15'
+    compile files('libs/reco-0.1.0-SNAPSHOT-standalone.jar')
 }

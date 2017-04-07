@@ -1,5 +1,7 @@
 package com.jacobobryant.moody;
 
+import java.util.List;
+
 public class Recommender {
     public Recommender(List<Metadata> songs) {
 

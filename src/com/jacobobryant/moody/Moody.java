@@ -26,6 +26,8 @@ import com.jacobobryant.moody.vanilla.PrefDefaults;
 import com.jacobobryant.moody.vanilla.PrefKeys;
 import com.jacobobryant.moody.vanilla.Song;
 
+import reco.reco;
+
 public class Moody {
     private static Moody instance;
     private Context context;
@@ -41,7 +43,7 @@ public class Moody {
     public static final String ACCOUNT_TYPE = "com.jacobobryant";
     public static final String ACCOUNT = "moodyaccount";
     private Account newAccount;
-    private Recommender rec;
+    private reco rec;
 
     private Moody() { }
 
@@ -106,7 +108,7 @@ public class Moody {
         db.setTransactionSuccessful();
         db.endTransaction();
         result.close();
-        rec = new Recommender(songs);
+        rec = new reco(conv(songs));
 
         // read in past skip data
         result = db.rawQuery("SELECT artist, album, title, skipped, mood, time " +
@@ -122,7 +124,6 @@ public class Moody {
             int mood = result.getInt(4);
             String time = result.getString(5);
 
-            Event event = new Event(artist, album, title, skipped, time);
             rec.add_event(artist, album, title, skipped, time);
             update_ratios(artist, album, title, skipped, mood);
         }
@@ -184,20 +185,20 @@ public class Moody {
 
     public Metadata pick_next() {
         float CONTROL_PROB = 0.075f;
-        float OLD_PROB = CONTROL_PROB + (1.0 - CONTROL_PROB) / 2;
+        double OLD_PROB = CONTROL_PROB + (1.0 - CONTROL_PROB) / 2;
         if (ratios == null) {
             throw new RuntimeException("init() hasn't been called");
         }
 
         // suggest a random song every now and then for evaluation purposes.
-        float x = Math.random();
+        double x = Math.random();
         if (x < CONTROL_PROB) {
             int item = new Random().nextInt(songs.size());
             random_song = songs.get(item);
             Log.d(C.TAG, "suggesting random song: " + random_song);
             return random_song;
-        } else if x >= OLD_PROB {
-            return rec.pick_next();
+        } else if (x >= OLD_PROB) {
+            return new Metadata(rec.pick_next());
         }
 
         Map<Metadata, Ratio> mratios = get_ratios(get_mood());
@@ -219,7 +220,7 @@ public class Moody {
         // pick a song to play next
         // TODO use BigDecimal to prevent drift
         Metadata choice = null;
-        double x = Math.random() * probSum;
+        x = Math.random() * probSum;
         for (Probability prob : probs) {
             if (x < prob.prob) {
                 choice = prob.m;
@@ -275,13 +276,23 @@ public class Moody {
 
     public void test() {
         //try {
-            Log.d(C.TAG, "begin test");
+        Log.d(C.TAG, "begin test");
 
-            SyncAdapter.sync(context);
+        //SyncAdapter.sync(context);
+        Log.d(C.TAG, rec.testing());
 
-            Log.d(C.TAG, "finish test");
+
+        Log.d(C.TAG, "finish test");
         //} catch (IOException e) {
         //    throw new RuntimeException(e);
         //}
+    }
+
+    public List<Map<String, String>> conv(List<Metadata> songs) {
+        List<Map<String, String>> ret = new ArrayList<>();
+        for (Metadata song : songs) {
+            ret.add(song.toMap());
+        }
+        return ret;
     }
 }
