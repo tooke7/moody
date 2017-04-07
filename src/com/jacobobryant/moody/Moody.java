@@ -124,7 +124,8 @@ public class Moody {
             int mood = result.getInt(4);
             String time = result.getString(5);
 
-            rec.add_event(artist, album, title, skipped, time);
+            //rec.add_event(artist, album, title, skipped, time);
+            rec.add_event(artist, album, title, skipped);
             update_ratios(artist, album, title, skipped, mood);
         }
         result.close();
@@ -198,7 +199,9 @@ public class Moody {
             Log.d(C.TAG, "suggesting random song: " + random_song);
             return random_song;
         } else if (x >= OLD_PROB) {
-            return new Metadata(rec.pick_next());
+            Metadata choice = new Metadata(rec.pick_next());
+            Log.d(C.TAG, "New alg choice: " + choice);
+            return choice;
         }
 
         Map<Metadata, Ratio> mratios = get_ratios(get_mood());
