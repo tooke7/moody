@@ -11,6 +11,8 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -124,8 +126,16 @@ public class Moody {
             int mood = result.getInt(4);
             String time = result.getString(5);
 
-            //rec.add_event(artist, album, title, skipped, time);
-            rec.add_event(artist, album, title, skipped);
+            long seconds;
+            try {
+                seconds = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+                        .parse(time).getTime() / 1000;
+            } catch (ParseException e) {
+                Log.e(C.TAG, "date couldn't be parsed");
+                continue;
+            }
+
+            rec.add_event(artist, album, title, skipped, seconds);
             update_ratios(artist, album, title, skipped, mood);
         }
         result.close();
@@ -185,58 +195,63 @@ public class Moody {
     }
 
     public Metadata pick_next() {
-        float CONTROL_PROB = 0.075f;
-        double OLD_PROB = CONTROL_PROB + (1.0 - CONTROL_PROB) / 2;
-        if (ratios == null) {
-            throw new RuntimeException("init() hasn't been called");
-        }
-
-        // suggest a random song every now and then for evaluation purposes.
-        double x = Math.random();
-        if (x < CONTROL_PROB) {
-            int item = new Random().nextInt(songs.size());
-            random_song = songs.get(item);
-            Log.d(C.TAG, "suggesting random song: " + random_song);
-            return random_song;
-        } else if (x >= OLD_PROB) {
-            Metadata choice = new Metadata(rec.pick_next());
-            Log.d(C.TAG, "New alg choice: " + choice);
-            return choice;
-        }
-
-        Map<Metadata, Ratio> mratios = get_ratios(get_mood());
-
-        // calculate the probability for all songs
-        List<Probability> probs = new LinkedList<>();
-        double probSum = 0;
-        for (Map.Entry<Metadata, Ratio> entry : mratios.entrySet()) {
-            Metadata key = entry.getKey();
-            if (key.type != Metadata.Type.SONG) {
-                continue;
-            }
-            Probability p = new Probability(mratios, key);
-            probSum += p.prob;
-            probs.add(p);
-        }
-        //Log.d(C.TAG, "probs.size()=" + String.valueOf(probs.size()));
-
-        // pick a song to play next
-        // TODO use BigDecimal to prevent drift
-        Metadata choice = null;
-        x = Math.random() * probSum;
-        for (Probability prob : probs) {
-            if (x < prob.prob) {
-                choice = prob.m;
-                break;
-            }
-            x -= prob.prob;
-        }
-        if (choice == null) {
-            Log.w(C.TAG, "shuffle choice out of range");
-            choice = probs.get(probs.size() - 1).m;
-        }
-
+        Metadata choice = new Metadata(rec.pick_next());
+        Log.d(C.TAG, "New alg choice: " + choice);
         return choice;
+
+
+        //float CONTROL_PROB = 0.075f;
+        //double OLD_PROB = CONTROL_PROB + (1.0 - CONTROL_PROB) / 2;
+        //if (ratios == null) {
+        //    throw new RuntimeException("init() hasn't been called");
+        //}
+
+        //// suggest a random song every now and then for evaluation purposes.
+        //double x = Math.random();
+        //if (x < CONTROL_PROB) {
+        //    int item = new Random().nextInt(songs.size());
+        //    random_song = songs.get(item);
+        //    Log.d(C.TAG, "suggesting random song: " + random_song);
+        //    return random_song;
+        //} else if (x >= OLD_PROB) {
+        //    Metadata choice = new Metadata(rec.pick_next());
+        //    Log.d(C.TAG, "New alg choice: " + choice);
+        //    return choice;
+        //}
+
+        //Map<Metadata, Ratio> mratios = get_ratios(get_mood());
+
+        //// calculate the probability for all songs
+        //List<Probability> probs = new LinkedList<>();
+        //double probSum = 0;
+        //for (Map.Entry<Metadata, Ratio> entry : mratios.entrySet()) {
+        //    Metadata key = entry.getKey();
+        //    if (key.type != Metadata.Type.SONG) {
+        //        continue;
+        //    }
+        //    Probability p = new Probability(mratios, key);
+        //    probSum += p.prob;
+        //    probs.add(p);
+        //}
+        ////Log.d(C.TAG, "probs.size()=" + String.valueOf(probs.size()));
+
+        //// pick a song to play next
+        //// TODO use BigDecimal to prevent drift
+        //Metadata choice = null;
+        //x = Math.random() * probSum;
+        //for (Probability prob : probs) {
+        //    if (x < prob.prob) {
+        //        choice = prob.m;
+        //        break;
+        //    }
+        //    x -= prob.prob;
+        //}
+        //if (choice == null) {
+        //    Log.w(C.TAG, "shuffle choice out of range");
+        //    choice = probs.get(probs.size() - 1).m;
+        //}
+
+        //return choice;
     }
 
     private void update_ratios(String artist, String album, String title,
