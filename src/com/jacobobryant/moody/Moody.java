@@ -45,7 +45,7 @@ public class Moody {
     public static final String ACCOUNT_TYPE = "com.jacobobryant";
     public static final String ACCOUNT = "moodyaccount";
     private Account newAccount;
-    private reco rec;
+    public reco rec;
 
     private Moody() { }
 
@@ -195,7 +195,9 @@ public class Moody {
     }
 
     public Metadata pick_next() {
-        Metadata choice = new Metadata(rec.pick_next());
+        Map<String, String> raw_choice = rec.pick_next();
+        Log.d(C.TAG, "raw_choice: " + raw_choice.keySet());
+        Metadata choice = new Metadata(raw_choice);
         Log.d(C.TAG, "New alg choice: " + choice);
         return choice;
 
@@ -259,7 +261,7 @@ public class Moody {
         Map<Metadata, Ratio> mood_ratios = get_ratios(mood);
         Metadata key = new Metadata(artist, album, title);
 
-        Log.d(C.TAG, "title=" + title + ", skipped=" + skipped);
+        //Log.d(C.TAG, "title=" + title + ", skipped=" + skipped);
         do {
             try {
                 mood_ratios.get(key).update(skipped);

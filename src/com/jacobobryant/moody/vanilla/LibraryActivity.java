@@ -837,8 +837,8 @@ public class LibraryActivity
 		menu.add(0, MENU_PLAYBACK, 0, R.string.playback_view);
 		menu.add(0, MENU_SEARCH, 0, R.string.search).setIcon(R.drawable.ic_menu_search).setVisible(false);
 		menu.add(0, MENU_SORT, 30, R.string.sort_by).setIcon(R.drawable.ic_menu_sort_alphabetically);
-		menu.add(0, MENU_MOOD, 0, "Mood");
 		if (BuildConfig.DEBUG) {
+            menu.add(0, MENU_MOOD, 0, "New session");
 			menu.add(0, MENU_TEST, 0, "Test");
 		}
 		return true;
@@ -857,26 +857,27 @@ public class LibraryActivity
 	{
 		switch (item.getItemId()) {
         case MENU_MOOD:
-            final String[] moods = new String[] { "mood 1", "mood 2", "mood 3",
-                                                  "mood 4", "mood 5"};
-            int mood = Moody.getInstance(this).get_mood();
+            Moody.getInstance(this).rec.new_session();
+            //final String[] moods = new String[] { "mood 1", "mood 2", "mood 3",
+            //                                      "mood 4", "mood 5"};
+            //int mood = Moody.getInstance(this).get_mood();
 
-			AlertDialog.Builder b = new AlertDialog.Builder(this);
-			b.setTitle("Mood");
-			b.setSingleChoiceItems(moods, mood, new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    Log.d(C.TAG, "Mood: " + moods[which]);
-                    SharedPreferences.Editor editor =
-                            PlaybackService.getSettings(LibraryActivity.this).edit();
-                    editor.putInt(PrefKeys.MOOD, which);
-                    editor.apply();
-                    dialog.dismiss();
-                }
-            });
-			b.setNeutralButton(R.string.done, this);
-			AlertDialog d = b.create();
-			d.show();
+			//AlertDialog.Builder b = new AlertDialog.Builder(this);
+			//b.setTitle("Mood");
+			//b.setSingleChoiceItems(moods, mood, new DialogInterface.OnClickListener() {
+            //    @Override
+            //    public void onClick(DialogInterface dialog, int which) {
+            //        Log.d(C.TAG, "Mood: " + moods[which]);
+            //        SharedPreferences.Editor editor =
+            //                PlaybackService.getSettings(LibraryActivity.this).edit();
+            //        editor.putInt(PrefKeys.MOOD, which);
+            //        editor.apply();
+            //        dialog.dismiss();
+            //    }
+            //});
+			//b.setNeutralButton(R.string.done, this);
+			//AlertDialog d = b.create();
+			//d.show();
 
             return true;
         case MENU_TEST:
