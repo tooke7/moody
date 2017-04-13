@@ -185,4 +185,6 @@
     (println (.pick_next rec))
     (println (.pick_next rec))
     (println (.pick_next rec))
+
+    (println "See src/reco/reco.clj for comments about what these things mean.")
 ))
