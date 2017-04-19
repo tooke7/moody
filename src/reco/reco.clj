@@ -32,20 +32,14 @@
 
 (defn ses-append [sessions mdata skipped create-session]
   (if create-session
-    (do
-      ;(println "NEW")
-      (cons {mdata skipped} sessions)
-      )
-    (do
-      ;(println "CURRENT")
-      (if (contains? (first sessions) mdata)
-        sessions
-        (cons (assoc (first sessions) mdata skipped)
-              (rest sessions))))))
+    (cons {mdata skipped} sessions)
+    (if (contains? (first sessions) mdata)
+      sessions
+      (cons (assoc (first sessions) mdata skipped)
+            (rest sessions)))))
 
 (defn -add_event
   ([this, mdata, skipped, timestamp]
-   ;(println (str "add_event: " mdata ", " skipped ", " timestamp))
    (swap! (.state this)
           (fn [state]
             (assoc state :last-time timestamp
@@ -66,7 +60,6 @@
   (let [universe (intersection (set (keys sesa)) (set (keys sesb)))
         hits (filter #(not (and (sesa %1) (sesb %1))) universe)
         matches (map #(if (= (sesa %1) (sesb %1) false) 1 0) universe)]
-    ;(/ (reduce + matches) (count hits))))
     (if (zero? (count hits))
       0
       (/ (reduce + matches) (count hits)))))
@@ -104,15 +97,15 @@
 (defn -pick_next [this]
   (let [sessions (:sessions @(.state this))
         neighbors (filter #(and (not-empty (:recs %1))
-                                (not (zero? (:score %1))))
+                                (> (:score %1) 0.4))
                           (map #(create-neighbor (first sessions) %1)
                                (rest sessions)))
         nearest (take k (sort-by :score neighbors))
         candidates (aggregate nearest)]
-    ;(println (str "candidates: " candidates))
+    (dbg "neighbors" (list neighbors))
     (if (empty? candidates)
       (rand-nth (:songs @(.state this)))
-      (dbg "choice" (:mdata (nth candidates (wrand (vec (map :score candidates)))))))))
+      (:mdata (nth candidates (wrand (vec (map :score candidates))))))))
 
 (defn -deref [this]
   (.state this))
@@ -186,5 +179,4 @@
     (println (.pick_next rec))
     (println (.pick_next rec))
 
-    (println "See src/reco/reco.clj for comments about what these things mean.")
-))
+    (println "See src/reco/reco.clj for comments about what these things mean.")))
