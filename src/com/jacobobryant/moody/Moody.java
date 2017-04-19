@@ -11,22 +11,21 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
-
 import com.jacobobryant.moody.vanilla.BuildConfig;
 import com.jacobobryant.moody.vanilla.PlaybackService;
 import com.jacobobryant.moody.vanilla.PrefDefaults;
 import com.jacobobryant.moody.vanilla.PrefKeys;
 import com.jacobobryant.moody.vanilla.Song;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 
 import reco.reco;
 
@@ -195,31 +194,31 @@ public class Moody {
     }
 
     public Metadata pick_next() {
-        Map<String, String> raw_choice = rec.pick_next();
-        Log.d(C.TAG, "raw_choice: " + raw_choice.keySet());
-        Metadata choice = new Metadata(raw_choice);
-        Log.d(C.TAG, "New alg choice: " + choice);
-        return choice;
+        //Map<String, String> raw_choice = rec.pick_next();
+        //Log.d(C.TAG, "raw_choice: " + raw_choice.keySet());
+        //Metadata choice = new Metadata(raw_choice);
+        //Log.d(C.TAG, "New alg choice: " + choice);
+        //return choice;
 
+        float CONTROL_PROB = 0.35f;
+        double OLD_PROB = CONTROL_PROB + (1.0 - CONTROL_PROB) / 2;
+        if (ratios == null) {
+            throw new RuntimeException("init() hasn't been called");
+        }
 
-        //float CONTROL_PROB = 0.075f;
-        //double OLD_PROB = CONTROL_PROB + (1.0 - CONTROL_PROB) / 2;
-        //if (ratios == null) {
-        //    throw new RuntimeException("init() hasn't been called");
-        //}
-
-        //// suggest a random song every now and then for evaluation purposes.
-        //double x = Math.random();
-        //if (x < CONTROL_PROB) {
-        //    int item = new Random().nextInt(songs.size());
-        //    random_song = songs.get(item);
-        //    Log.d(C.TAG, "suggesting random song: " + random_song);
-        //    return random_song;
-        //} else if (x >= OLD_PROB) {
-        //    Metadata choice = new Metadata(rec.pick_next());
-        //    Log.d(C.TAG, "New alg choice: " + choice);
-        //    return choice;
-        //}
+        // suggest a random song every now and then for evaluation purposes.
+        double x = Math.random();
+        if (x < CONTROL_PROB) {
+            int item = new Random().nextInt(songs.size());
+            random_song = songs.get(item);
+            Log.d(C.TAG, "suggesting random song: " + random_song);
+            return random_song;
+            //} else if (x >= OLD_PROB) {
+        } else {
+            Metadata choice = new Metadata(rec.pick_next());
+            Log.d(C.TAG, "New alg choice: " + choice);
+            return choice;
+        }
 
         //Map<Metadata, Ratio> mratios = get_ratios(get_mood());
 
