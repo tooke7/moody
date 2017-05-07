@@ -11,7 +11,7 @@
    :init init
    :constructors {[java.util.Collection] []}))
 
-(use '[clojure.set :only [intersection union]])
+(use '[clojure.set :only [intersection union difference]])
 
 (def ses-threshold (* 30 60))
 (def k 5)
@@ -22,7 +22,8 @@
 (defn -init [songs]
   [[] (atom {:songs songs
              :sessions nil
-             :last-time 0})])
+             :last-time 0
+             :model nil})])
 
 (defn -new_session [this]
   (swap! (.state this)
@@ -53,27 +54,28 @@
    (.add_event this artist album title skipped (now))))
 
 (defn dbg [desc arg]
-  ;(println (str desc ": " arg))
+  ;(print (str desc ": "))
+  ;(prn arg)
   arg)
 
-(defn dist [sesa sesb]
-  (let [universe (intersection (set (keys sesa)) (set (keys sesb)))
-        hits (filter #(not (and (sesa %1) (sesb %1))) universe)
-        matches (map #(if (= (sesa %1) (sesb %1) false) 1 0) universe)]
-    (if (zero? (count hits))
-      0
-      (/ (reduce + matches) (count hits)))))
-
-(defn aggregate [sessions]
-  (let [universe (apply union (map #(set (:recs %1)) sessions))]
-    (map (fn [mdata]
-           {:mdata mdata
-            :score (reduce + (map (fn [ses]
-                                    (if (contains? (:recs ses) mdata)
-                                      (:score ses)
-                                      0))
-                                  sessions))})
-         universe)))
+;(defn dist [sesa sesb]
+;  (let [universe (intersection (set (keys sesa)) (set (keys sesb)))
+;        hits (filter #(not (and (sesa %1) (sesb %1))) universe)
+;        matches (map #(if (= (sesa %1) (sesb %1) false) 1 0) universe)]
+;    (if (zero? (count hits))
+;      0
+;      (/ (reduce + matches) (count hits)))))
+;
+;(defn aggregate [sessions]
+;  (let [universe (apply union (map #(set (:recs %1)) sessions))]
+;    (map (fn [mdata]
+;           {:mdata mdata
+;            :score (reduce + (map (fn [ses]
+;                                    (if (contains? (:recs ses) mdata)
+;                                      (:score ses)
+;                                      0))
+;                                  sessions))})
+;         universe)))
 
 (defn wrand 
   "given a vector of slice sizes, returns the index of a slice given a
@@ -88,24 +90,52 @@
         i
         (recur (inc i) (+ (slices i) sum))))))
 
-(defn create-neighbor [cur-session ses]
-  {:score (dist cur-session ses)
-   :recs (set (filter #(and (not (ses %1))
-                            (not (contains? cur-session %1)))
-                      (keys ses)))})
+;(defn create-neighbor [cur-session ses]
+;  {:score (dist cur-session ses)
+;   :recs (set (filter #(and (not (ses %1))
+;                            (not (contains? cur-session %1)))
+;                      (keys ses)))})
+
+;(defn -pick_next [this]
+;  (let [sessions (:sessions @(.state this))
+;        neighbors (filter #(and (not-empty (:recs %1))
+;                                (> (:score %1) 0.4))
+;                          (map #(create-neighbor (first sessions) %1)
+;                               (rest sessions)))
+;        nearest (take k (sort-by :score neighbors))
+;        candidates (aggregate nearest)]
+;    (dbg "neighbors" (list neighbors))
+;    (if (empty? candidates)
+;      (rand-nth (:songs @(.state this)))
+;      (:mdata (nth candidates (wrand (vec (map :score candidates))))))))
+
+;(defn gen-model [state] state)
+;  (let [model (or (:model @(.state this))
+;                  (:model (swap! (.state this) gen-model)))
+
+(defn sim [sessions a b]
+  (dbg (str "sim " a b)
+  (/ (reduce + (map (fn [session] (if (= (session a) (session b) false) 1 0))
+                    sessions))
+     (max 1 (reduce + (map (fn [session] (if (not (or (nil? (session a))
+                                                      (nil? (session b)))) 1 0))
+                           sessions))))))
 
 (defn -pick_next [this]
-  (let [sessions (:sessions @(.state this))
-        neighbors (filter #(and (not-empty (:recs %1))
-                                (> (:score %1) 0.4))
-                          (map #(create-neighbor (first sessions) %1)
-                               (rest sessions)))
-        nearest (take k (sort-by :score neighbors))
-        candidates (aggregate nearest)]
-    (dbg "neighbors" (list neighbors))
-    (if (empty? candidates)
-      (rand-nth (:songs @(.state this)))
+  (let [sessions (rest (:sessions @(.state this)))
+        cur (first (:sessions @(.state this)))
+        universe (difference (set (:songs @(.state this))) (set (keys cur)))
+        candidates (map (fn [candidate]
+                          {:mdata candidate
+                           :score (reduce + (map #(sim sessions candidate %1)
+                                                 (set (keys cur))))})
+                        universe)]
+    (if (= 0 (reduce + (map #(:score %1) candidates)))
+      (do
+        (println "ohno"
+        (rand-nth (:songs @(.state this)))))
       (:mdata (nth candidates (wrand (vec (map :score candidates))))))))
+
 
 (defn -deref [this]
   (.state this))
@@ -118,8 +148,14 @@
   ; this initializes the user's library with the given songs. This information
   ; actually isn't used very much right now because the recommender works with
   ; songs given by calls to add_event.
-  (let [rec (new reco.reco [{:artist "rise against" :album "myalbum" :title "the dirt whispered"}
-                            {:artist "evanescence" :album "foobar" :title "lithium"}])]
+  (let [a {"artist" "a" "album" "a" "title" "a"}
+        b {"artist" "b" "album" "b" "title" "b"}
+        c {"artist" "c" "album" "c" "title" "c"}
+        d {"artist" "d" "album" "d" "title" "d"}
+        e {"artist" "e" "album" "e" "title" "e"}
+        f {"artist" "f" "album" "f" "title" "f"}
+        g {"artist" "g" "album" "g" "title" "g"}
+        rec (new reco.reco [a b c d e f g])]
     
     ; explanation of the first line in session 0:
     ; artist: a
@@ -156,6 +192,11 @@
     (.add_event rec "c" "c" "c" false 6000)
     (.add_event rec "d" "d" "d" false 6000)
 
+    ;(let [sessions (:sessions @@rec)]
+    ;  (println (sim sessions a b))
+    ;  (println (sim sessions b c))
+    ;  (println (sim sessions f g)))
+    ;))
 
     ; these recommendations will be either e, f or g.
     ; e has the highest probability of being picked because it's in both
@@ -175,10 +216,11 @@
     ; Now the system won't be able to generate any recommendations because all the songs it
     ; knows about are already in the current session. Instead, it'll choose a random song from
     ; the library (i.e. either "the dirt whispered" or "lithium").
-    (.add_event rec "e" "e" "e" false 6000)
-    (.add_event rec "f" "f" "f" false 6000)
-    (.add_event rec "g" "g" "g" false 6000)
-    (println (.pick_next rec))
-    (println (.pick_next rec))
+    ;(.add_event rec "e" "e" "e" false 6000)
+    ;(.add_event rec "f" "f" "f" false 6000)
+    ;(.add_event rec "g" "g" "g" false 6000)
+    ;(println (.pick_next rec))
+    ;(println (.pick_next rec))
 
-    (println "See src/reco/reco.clj for comments about what these things mean.")))
+    ;(println "See src/reco/reco.clj for comments about what these things mean.")))
+    ))
