@@ -156,13 +156,6 @@
     (.add_event rec "c" "c" "c" false 6000)
     (.add_event rec "d" "d" "d" false 6000)
 
-    ; if you uncomment these lines, the system won't be able to generate any
-    ; recommendations because all the songs it knows about are already in the
-    ; current session. Instead, it'll choose a random song from the library
-    ; (i.e. either "the dirt whispered" or "lithium").
-    ;(.add_event rec "e" "e" "e" false 6000)
-    ;(.add_event rec "f" "f" "f" false 6000)
-    ;(.add_event rec "g" "g" "g" false 6000)
 
     ; these recommendations will be either e, f or g.
     ; e has the highest probability of being picked because it's in both
@@ -176,6 +169,15 @@
     (println (.pick_next rec))
     (println (.pick_next rec))
     (println (.pick_next rec))
+    (println (.pick_next rec))
+    (println (.pick_next rec))
+
+    ; Now the system won't be able to generate any recommendations because all the songs it
+    ; knows about are already in the current session. Instead, it'll choose a random song from
+    ; the library (i.e. either "the dirt whispered" or "lithium").
+    (.add_event rec "e" "e" "e" false 6000)
+    (.add_event rec "f" "f" "f" false 6000)
+    (.add_event rec "g" "g" "g" false 6000)
     (println (.pick_next rec))
     (println (.pick_next rec))
 
