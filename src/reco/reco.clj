@@ -7,11 +7,14 @@
              [add_event [java.util.Map, boolean, long] void]
              [pick_next [] java.util.Map]
              [new_session [] void]
+             [update_model [] void]
              [testing [] String]]
    :init init
    :constructors {[java.util.Collection] []}))
 
 (use '[clojure.set :only [intersection union difference]])
+(use '[clojure.math.combinatorics :only [combinations]])
+(use '[clojure.pprint :only [pprint]])
 
 (def ses-threshold (* 30 60))
 (def k 5)
@@ -39,15 +42,38 @@
       (cons (assoc (first sessions) mdata skipped)
             (rest sessions)))))
 
+(defn mini-model [session]
+  (apply merge (map (fn [[a b]]
+                {(set [a b])
+                 {:num (if (= (session a) (session b) false) 1 0)
+                  :den (if (not (or (nil? (session a))
+                                    (nil? (session b)))) 1 0)}})
+              (combinations (set (keys session)) 2))))
+
+(defn merge-models [models]
+  (apply merge-with #(merge-with + %1 %2) models))
+
+(defn convert-cell [[k v]]
+  [k {:score (- (* 2 (/ (:num v) (max 1 (:den v))))
+                1)
+      :n (:den v)}])
+
+(defn mk-model [sessions]
+  (into {} (map convert-cell (merge-models (map mini-model sessions)))))
+
 (defn -add_event
   ([this, mdata, skipped, timestamp]
    (swap! (.state this)
           (fn [state]
-            (assoc state :last-time timestamp
-                   :sessions (ses-append (:sessions state)
-                                         mdata
-                                         skipped
-                                         (> timestamp (+ (:last-time state) ses-threshold)))))))
+            (let [new-session (> timestamp (+ (:last-time state) ses-threshold))]
+              (assoc state :last-time timestamp
+                     :sessions (ses-append (:sessions state)
+                                           mdata
+                                           skipped
+                                           new-session)
+                     :model (if (and new-session (:model state))
+                              (mk-model (:sessions state))
+                              (:model state)))))))
   ([this, artist, album, title, skipped, timestamp]
    (.add_event this {"artist" artist "album" album "title" title} skipped timestamp))
   ([this, artist, album, title, skipped]
@@ -57,25 +83,6 @@
   ;(print (str desc ": "))
   ;(prn arg)
   arg)
-
-;(defn dist [sesa sesb]
-;  (let [universe (intersection (set (keys sesa)) (set (keys sesb)))
-;        hits (filter #(not (and (sesa %1) (sesb %1))) universe)
-;        matches (map #(if (= (sesa %1) (sesb %1) false) 1 0) universe)]
-;    (if (zero? (count hits))
-;      0
-;      (/ (reduce + matches) (count hits)))))
-;
-;(defn aggregate [sessions]
-;  (let [universe (apply union (map #(set (:recs %1)) sessions))]
-;    (map (fn [mdata]
-;           {:mdata mdata
-;            :score (reduce + (map (fn [ses]
-;                                    (if (contains? (:recs ses) mdata)
-;                                      (:score ses)
-;                                      0))
-;                                  sessions))})
-;         universe)))
 
 (defn wrand 
   "given a vector of slice sizes, returns the index of a slice given a
@@ -90,50 +97,26 @@
         i
         (recur (inc i) (+ (slices i) sum))))))
 
-;(defn create-neighbor [cur-session ses]
-;  {:score (dist cur-session ses)
-;   :recs (set (filter #(and (not (ses %1))
-;                            (not (contains? cur-session %1)))
-;                      (keys ses)))})
+(defn -update_model [this]
+  (swap! (.state this)
+         (fn [state]
+           (assoc state :model (mk-model (:sessions state))))))
 
-;(defn -pick_next [this]
-;  (let [sessions (:sessions @(.state this))
-;        neighbors (filter #(and (not-empty (:recs %1))
-;                                (> (:score %1) 0.4))
-;                          (map #(create-neighbor (first sessions) %1)
-;                               (rest sessions)))
-;        nearest (take k (sort-by :score neighbors))
-;        candidates (aggregate nearest)]
-;    (dbg "neighbors" (list neighbors))
-;    (if (empty? candidates)
-;      (rand-nth (:songs @(.state this)))
-;      (:mdata (nth candidates (wrand (vec (map :score candidates))))))))
-
-;(defn gen-model [state] state)
-;  (let [model (or (:model @(.state this))
-;                  (:model (swap! (.state this) gen-model)))
-
-(defn sim [sessions a b]
-  (dbg (str "sim " a b)
-  (/ (reduce + (map (fn [session] (if (= (session a) (session b) false) 1 0))
-                    sessions))
-     (max 1 (reduce + (map (fn [session] (if (not (or (nil? (session a))
-                                                      (nil? (session b)))) 1 0))
-                           sessions))))))
+(defn mk-candidate [candidate model cur]
+  {:mdata candidate
+   :score (reduce + (map #(get-in model [(set [candidate %1]) :score] 0)
+                         (set (keys cur))))})
 
 (defn -pick_next [this]
-  (let [sessions (rest (:sessions @(.state this)))
+  (let [model (:model @(.state this))
         cur (first (:sessions @(.state this)))
         universe (difference (set (:songs @(.state this))) (set (keys cur)))
-        candidates (map (fn [candidate]
-                          {:mdata candidate
-                           :score (reduce + (map #(sim sessions candidate %1)
-                                                 (set (keys cur))))})
-                        universe)]
-    (if (= 0 (reduce + (map #(:score %1) candidates)))
+        candidates (filter #(> (:score %1) 0)
+                           (map #(mk-candidate %1 model cur) universe))]
+    (if (empty? candidates)
       (do
-        (println "ohno"
-        (rand-nth (:songs @(.state this)))))
+        (println "ohno")
+        (rand-nth (:songs @(.state this))))
       (:mdata (nth candidates (wrand (vec (map :score candidates))))))))
 
 
@@ -155,7 +138,10 @@
         e {"artist" "e" "album" "e" "title" "e"}
         f {"artist" "f" "album" "f" "title" "f"}
         g {"artist" "g" "album" "g" "title" "g"}
-        rec (new reco.reco [a b c d e f g])]
+        h {"artist" "h" "album" "h" "title" "h"}
+        rec (new reco.reco [a b c d e f g h])]
+
+    (println (str "count" (count (:songs @@rec))))
     
     ; explanation of the first line in session 0:
     ; artist: a
@@ -181,9 +167,11 @@
     (.add_event rec "d" "d" "d" false 4000)
     (.add_event rec "e" "e" "e" false 4000)
     (.add_event rec "g" "g" "g" false 4000)
+    (.add_event rec "h" "h" "h" true 4000)
 
     ; this will choose "f" because it's the only song in the first session that
     ; isn't in the current session
+    (.update_model rec)
     (println (str "next song: " (.pick_next rec)))
 
     ; session 2 (current session)
@@ -192,11 +180,12 @@
     (.add_event rec "c" "c" "c" false 6000)
     (.add_event rec "d" "d" "d" false 6000)
 
+    (.update_model rec)
+
     ;(let [sessions (:sessions @@rec)]
     ;  (println (sim sessions a b))
     ;  (println (sim sessions b c))
     ;  (println (sim sessions f g)))
-    ;))
 
     ; these recommendations will be either e, f or g.
     ; e has the highest probability of being picked because it's in both
@@ -213,14 +202,17 @@
     (println (.pick_next rec))
     (println (.pick_next rec))
 
+    ;(println "model:")
+    ;(pprint (:model @@rec))
+
     ; Now the system won't be able to generate any recommendations because all the songs it
     ; knows about are already in the current session. Instead, it'll choose a random song from
     ; the library (i.e. either "the dirt whispered" or "lithium").
-    ;(.add_event rec "e" "e" "e" false 6000)
-    ;(.add_event rec "f" "f" "f" false 6000)
-    ;(.add_event rec "g" "g" "g" false 6000)
-    ;(println (.pick_next rec))
-    ;(println (.pick_next rec))
+    (.add_event rec "e" "e" "e" false 6000)
+    (.add_event rec "f" "f" "f" false 6000)
+    (.add_event rec "g" "g" "g" false 6000)
+    (println (.pick_next rec))
+    (println (.pick_next rec))
 
     ;(println "See src/reco/reco.clj for comments about what these things mean.")))
     ))
