@@ -39,10 +39,13 @@
   (quot (System/currentTimeMillis) 1000))
 
 (defn -init [songs]
-  [[] (atom {:songs songs
+  ; into turns the java hashmap into a normal hashmap or something. Otherwise,
+  ; the get-in call in mk-candidate always returns 0.
+  [[] (atom {:songs (map #(into {} %) songs)
              :sessions nil
              :last-time 0
-             :model nil})])
+             :model nil
+             :freshness {}})])
 
 (defn -new_session [this]
   (swap! (.state this)
@@ -74,7 +77,7 @@
       :n (:den v)}])
 
 (defn mk-model [sessions]
-  (into {} (map convert-cell (merge-models (map mini-model sessions)))))
+  (->> sessions (map mini-model) merge-models (map convert-cell) (into {})))
 
 (defn -add_event
   ([this, mdata, skipped, timestamp]
@@ -88,7 +91,9 @@
                                            new-session)
                      :model (if (and new-session (:model state))
                               (mk-model (:sessions state))
-                              (:model state)))))))
+                              (:model state))
+                     :freshness (assoc (:freshness state)
+                                       mdata timestamp))))))
   ([this, artist, album, title, skipped, timestamp]
    (.add_event this {"artist" artist "album" album "title" title} skipped timestamp))
   ([this, artist, album, title, skipped]
@@ -118,32 +123,26 @@
 
 (defn mk-candidate [candidate model cur]
   {:mdata candidate
-   :score (reduce + (map #(get-in model [(set [%1 candidate]) :score] 0)
-                         (set (keys cur))))})
-
+   :score (->> (set (keys cur))
+               (map #(get-in model [(set [%1 candidate]) :score] 0))
+               (reduce +))})
 
 (defn -pick_next [this]
   (let [model (:model @@this)
-        cur (first (:sessions @(.state this)))
+        cur (first (:sessions @@this))
         universe (difference (set (:songs @@this)) (set (keys cur)))
-        candidates (reverse (sort-by :score (map #(mk-candidate (into {} %1) model cur)
-                                                 universe)))]
-    (println "linds in universe: "
-             (contains? universe 
-                        {"artist" "Lindsey Stirling"
-                         "album" "Lindsey Stirling"
-                         "title" "Crystallize"}))
+        candidates (->> universe
+                        (map #(mk-candidate % model cur))
+                        (filter #(< 0 (:score %)))
+                        (sort-by :score) reverse)]
 
-    ;(dbg "current session" cur)
-    ;(dbg "first 10 universe" (take 10 universe))
-    ;(dbg "count candidates" (count candidates))
-    ;(dbg "first 10 candidates" (take 10 candidates))
+    (dbg "current session" cur)
+    (dbg "count candidates" (count candidates))
+    (dbg "first 10 candidates" (take 10 candidates))
     (if (empty? candidates)
-      (do
-        (println "ohno")
-        (rand-nth (:songs @(.state this))))
-      (:mdata (nth candidates (wrand (vec (map #(+ 1 (:score %))
-                                               (take 10 candidates)))))))))
+      (rand-nth (:songs @@this))
+      (:mdata (->> candidates (take 10) (map :score)
+                   vec wrand (nth candidates))))))
 
 
 (defn -deref [this]
@@ -158,6 +157,7 @@
 
 (defn -pprint_model [this]
   (let [model (:model @@this)
+        freshness (:freshness @@this)
         sorted (into (sorted-map-by (mk-comparator model)) model)
         sessions (:sessions @@this)]
     (println (count model) " items in model")
@@ -171,6 +171,8 @@
     ;                        "title" "Give Me A Sign"}
     ;                       false}))
     (dbg "pick_next" (.pick_next this))
+    (println "top 10 least fresh items:")
+    (pprint (take 10 (reverse (sort-by last (vec freshness)))))
 
     ;(pprint (filter #(contains? (first %) {"artist" "Breaking Benjamin",
     ;                                       "album" "Dear Agony",
@@ -203,6 +205,7 @@
     (.update_model rec)
 
     (pprint (mk-candidate a (:model @@rec) {b false}))
+    (println (.pick_next rec))
 
     ;(.pprint_model rec)
 
