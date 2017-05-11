@@ -8,9 +8,11 @@
              [pick_next [] java.util.Map]
              [new_session [] void]
              [update_model [] void]
+             [pprint_model [] void]
              [testing [] String]]
    :init init
-   :constructors {[java.util.Collection] []}))
+   :constructors {[java.util.Collection] []}
+   :require [clojure.java.jdbc :as jd]))
 
 (use '[clojure.set :only [intersection union difference]])
 (use '[clojure.math.combinatorics :only [combinations]])
@@ -18,6 +20,20 @@
 
 (def ses-threshold (* 30 60))
 (def k 5)
+(def a {"artist" "a" "album" "a" "title" "a"})
+(def b {"artist" "b" "album" "b" "title" "b"})
+(def c {"artist" "c" "album" "c" "title" "c"})
+(def d {"artist" "d" "album" "d" "title" "d"})
+(def e {"artist" "e" "album" "e" "title" "e"})
+(def f {"artist" "f" "album" "f" "title" "f"})
+(def g {"artist" "g" "album" "g" "title" "g"})
+(def h {"artist" "h" "album" "h" "title" "h"})
+
+(def db
+  {:classname   "org.sqlite.JDBC"
+   :subprotocol "sqlite"
+   :subname     "moody.db"
+   })
 
 (defn now []
   (quot (System/currentTimeMillis) 1000))
@@ -44,11 +60,10 @@
 
 (defn mini-model [session]
   (apply merge (map (fn [[a b]]
-                {(set [a b])
-                 {:num (if (= (session a) (session b) false) 1 0)
-                  :den (if (not (or (nil? (session a))
-                                    (nil? (session b)))) 1 0)}})
-              (combinations (set (keys session)) 2))))
+                      {(set [a b])
+                       {:num (if (= (session a) (session b) false) 1 0)
+                        :den (if (= (session a) (session b) true) 0 1)}})
+                    (combinations (set (keys session)) 2))))
 
 (defn merge-models [models]
   (apply merge-with #(merge-with + %1 %2) models))
@@ -80,8 +95,8 @@
    (.add_event this artist album title skipped (now))))
 
 (defn dbg [desc arg]
-  ;(print (str desc ": "))
-  ;(prn arg)
+  (print (str desc ": "))
+  (pprint arg)
   arg)
 
 (defn wrand 
@@ -89,7 +104,6 @@
   random spin of a roulette wheel with compartments proportional to
   slices."
   [slices]
-  (dbg "slices" slices)
   (let [total (reduce + slices)
         r (rand total)]
     (loop [i 0 sum 0]
@@ -104,20 +118,32 @@
 
 (defn mk-candidate [candidate model cur]
   {:mdata candidate
-   :score (reduce + (map #(get-in model [(set [candidate %1]) :score] 0)
+   :score (reduce + (map #(get-in model [(set [%1 candidate]) :score] 0)
                          (set (keys cur))))})
 
+
 (defn -pick_next [this]
-  (let [model (:model @(.state this))
+  (let [model (:model @@this)
         cur (first (:sessions @(.state this)))
-        universe (difference (set (:songs @(.state this))) (set (keys cur)))
-        candidates (filter #(> (:score %1) 0)
-                           (map #(mk-candidate %1 model cur) universe))]
+        universe (difference (set (:songs @@this)) (set (keys cur)))
+        candidates (reverse (sort-by :score (map #(mk-candidate (into {} %1) model cur)
+                                                 universe)))]
+    (println "linds in universe: "
+             (contains? universe 
+                        {"artist" "Lindsey Stirling"
+                         "album" "Lindsey Stirling"
+                         "title" "Crystallize"}))
+
+    ;(dbg "current session" cur)
+    ;(dbg "first 10 universe" (take 10 universe))
+    ;(dbg "count candidates" (count candidates))
+    ;(dbg "first 10 candidates" (take 10 candidates))
     (if (empty? candidates)
       (do
         (println "ohno")
         (rand-nth (:songs @(.state this))))
-      (:mdata (nth candidates (wrand (vec (map :score candidates))))))))
+      (:mdata (nth candidates (wrand (vec (map #(+ 1 (:score %))
+                                               (take 10 candidates)))))))))
 
 
 (defn -deref [this]
@@ -125,34 +151,35 @@
 
 (defn -testing [this] "hello there")
 
-(defn -main [& args]
-  (println "starting")
+(defn mk-comparator [model]
+  (fn [key1 key2]
+    (compare [(get-in model [key2 :n]) (get-in model [key2 :score])]
+             [(get-in model [key1 :n]) (get-in model [key1 :score])])))
 
-  ; this initializes the user's library with the given songs. This information
-  ; actually isn't used very much right now because the recommender works with
-  ; songs given by calls to add_event.
-  (let [a {"artist" "a" "album" "a" "title" "a"}
-        b {"artist" "b" "album" "b" "title" "b"}
-        c {"artist" "c" "album" "c" "title" "c"}
-        d {"artist" "d" "album" "d" "title" "d"}
-        e {"artist" "e" "album" "e" "title" "e"}
-        f {"artist" "f" "album" "f" "title" "f"}
-        g {"artist" "g" "album" "g" "title" "g"}
-        h {"artist" "h" "album" "h" "title" "h"}
-        rec (new reco.reco [a b c d e f g h])]
+(defn -pprint_model [this]
+  (let [model (:model @@this)
+        sorted (into (sorted-map-by (mk-comparator model)) model)
+        sessions (:sessions @@this)]
+    (println (count model) " items in model")
+    ;(println "candidate:")
+    ;(pprint (mk-candidate {"artist" "Lindsey Stirling"
+    ;                       "album" "Lindsey Stirling"
+    ;                       "title" "Crystallize"}
+    ;                      model
+    ;                      {{"artist" "Breaking Benjamin",
+    ;                        "album" "Dear Agony",
+    ;                        "title" "Give Me A Sign"}
+    ;                       false}))
+    (dbg "pick_next" (.pick_next this))
 
-    (println (str "count" (count (:songs @@rec))))
-    
-    ; explanation of the first line in session 0:
-    ; artist: a
-    ; album: a
-    ; title: a
-    ; skipped: true (i.e. the user skipped the song instead of listening to it).
-    ; time: 2000 (i.e. this song ended 2000 seconds after the unix epoch). If
-    ; there's at least 1800 seconds (half an hour) between songs, then we count
-    ; that as a divider between sessions.
+    ;(pprint (filter #(contains? (first %) {"artist" "Breaking Benjamin",
+    ;                                       "album" "Dear Agony",
+    ;                                       "title" "Give Me A Sign"})
+    ;                model))))
+    ))
 
-    ; session 0
+(defn demo []
+  (let [rec (new reco.reco [a b c d e f g h])]
     (.add_event rec "a" "a" "a" true 2000)
     (.add_event rec "b" "b" "b" false 2000)
     (.add_event rec "c" "c" "c" false 2000)
@@ -160,7 +187,6 @@
     (.add_event rec "e" "e" "e" false 2000)
     (.add_event rec "f" "f" "f" false 2000)
 
-    ; session 1
     (.add_event rec "a" "a" "a" false 4000)
     (.add_event rec "b" "b" "b" false 4000)
     (.add_event rec "c" "c" "c" false 4000)
@@ -169,18 +195,16 @@
     (.add_event rec "g" "g" "g" false 4000)
     (.add_event rec "h" "h" "h" true 4000)
 
-    ; this will choose "f" because it's the only song in the first session that
-    ; isn't in the current session
-    (.update_model rec)
-    (println (str "next song: " (.pick_next rec)))
-
-    ; session 2 (current session)
     (.add_event rec "a" "a" "a" false 6000)
     (.add_event rec "b" "b" "b" false 6000)
     (.add_event rec "c" "c" "c" false 6000)
     (.add_event rec "d" "d" "d" false 6000)
 
     (.update_model rec)
+
+    (pprint (mk-candidate a (:model @@rec) {b false}))
+
+    ;(.pprint_model rec)
 
     ;(let [sessions (:sessions @@rec)]
     ;  (println (sim sessions a b))
@@ -192,27 +216,18 @@
     ; previous sessions.
     ; g is next because sessions 1 and 2 are more similar than sessions 0 and 2.
     ; f is the least likely prediction.
-    (println (.pick_next rec))
-    (println (.pick_next rec))
-    (println (.pick_next rec))
-    (println (.pick_next rec))
-    (println (.pick_next rec))
-    (println (.pick_next rec))
-    (println (.pick_next rec))
-    (println (.pick_next rec))
-    (println (.pick_next rec))
+    ;(println (.pick_next rec))
+    ;(println (.pick_next rec))
+    ;(println (.pick_next rec))
+    ;(println (.pick_next rec))
+    ;(println (.pick_next rec))
+    ;(println (.pick_next rec))
+    ;(println (.pick_next rec))
+    ;(println (.pick_next rec))
+    ;(println (.pick_next rec))
 
-    ;(println "model:")
-    ;(pprint (:model @@rec))
-
-    ; Now the system won't be able to generate any recommendations because all the songs it
-    ; knows about are already in the current session. Instead, it'll choose a random song from
-    ; the library (i.e. either "the dirt whispered" or "lithium").
-    (.add_event rec "e" "e" "e" false 6000)
-    (.add_event rec "f" "f" "f" false 6000)
-    (.add_event rec "g" "g" "g" false 6000)
-    (println (.pick_next rec))
-    (println (.pick_next rec))
-
-    ;(println "See src/reco/reco.clj for comments about what these things mean.")))
     ))
+
+(defn -main [& args]
+  (demo))
+  
