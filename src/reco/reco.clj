@@ -92,8 +92,10 @@
                      :model (if (and new-session (:model state))
                               (mk-model (:sessions state))
                               (:model state))
-                     :freshness (assoc (:freshness state)
-                                       mdata timestamp))))))
+                     :freshness (if-not skipped
+                                  (assoc (:freshness state)
+                                         mdata timestamp)
+                                  (:freshness state)))))))
   ([this, artist, album, title, skipped, timestamp]
    (.add_event this {"artist" artist "album" album "title" title} skipped timestamp))
   ([this, artist, album, title, skipped]
@@ -121,24 +123,45 @@
          (fn [state]
            (assoc state :model (mk-model (:sessions state))))))
 
-(defn mk-candidate [candidate model cur]
+(defn calc-freshness [mdata freshness]
+  (- 1 (Math/exp (/ (- (get freshness mdata 0) (now)) 86400))))
+
+(defn margin-of-error [score n]
+  (* 1.28 (Math/sqrt (/ (* score (- 1 score)) (max n 1)))))
+
+(defn mk-candidate [candidate model freshness cur]
+  (let [songs (set (keys cur))
+        raw-mean (->> songs
+                      (map #(get-in model [(set [%1 candidate]) :score] 0))
+                      (reduce +))
+        n (->> songs
+               (map #(get-in model [(set [%1 candidate]) :n] 0))
+               (reduce +))
+        margin (* (margin-of-error raw-mean n) (count songs))
+        fresh-score (calc-freshness candidate freshness)
+        final-score (* (+ raw-mean margin) fresh-score)]
+    ;(dbg "candidate" candidate)
+    ;(dbg "raw-mean" raw-mean)
+    ;(dbg "n" n)
+    ;(dbg "margin" margin)
+    ;(dbg "fresh-score" fresh-score)
+    ;(dbg "final-score" final-score)
   {:mdata candidate
-   :score (->> (set (keys cur))
-               (map #(get-in model [(set [%1 candidate]) :score] 0))
-               (reduce +))})
+   :score final-score}))
 
 (defn -pick_next [this]
   (let [model (:model @@this)
+        freshness (:freshness @@this)
         cur (first (:sessions @@this))
         universe (difference (set (:songs @@this)) (set (keys cur)))
         candidates (->> universe
-                        (map #(mk-candidate % model cur))
+                        (map #(mk-candidate % model freshness cur))
                         (filter #(< 0 (:score %)))
                         (sort-by :score) reverse)]
 
-    (dbg "current session" cur)
-    (dbg "count candidates" (count candidates))
-    (dbg "first 10 candidates" (take 10 candidates))
+    ;(dbg "current session" cur)
+    ;(dbg "count candidates" (count candidates))
+    ;(dbg "first 10 candidates" (take 10 candidates))
     (if (empty? candidates)
       (rand-nth (:songs @@this))
       (:mdata (->> candidates (take 10) (map :score)
@@ -160,7 +183,7 @@
         freshness (:freshness @@this)
         sorted (into (sorted-map-by (mk-comparator model)) model)
         sessions (:sessions @@this)]
-    (println (count model) " items in model")
+    ;(println (count model) " items in model")
     ;(println "candidate:")
     ;(pprint (mk-candidate {"artist" "Lindsey Stirling"
     ;                       "album" "Lindsey Stirling"
@@ -170,9 +193,9 @@
     ;                        "album" "Dear Agony",
     ;                        "title" "Give Me A Sign"}
     ;                       false}))
-    (dbg "pick_next" (.pick_next this))
-    (println "top 10 least fresh items:")
-    (pprint (take 10 (reverse (sort-by last (vec freshness)))))
+    ;(dbg "pick_next" (.pick_next this))
+    ;(println "top 10 least fresh items:")
+    ;(pprint (take 10 (reverse (sort-by last (vec freshness)))))
 
     ;(pprint (filter #(contains? (first %) {"artist" "Breaking Benjamin",
     ;                                       "album" "Dear Agony",
@@ -204,7 +227,14 @@
 
     (.update_model rec)
 
-    (pprint (mk-candidate a (:model @@rec) {b false}))
+    (pprint (mk-candidate a (:model @@rec) (:freshness @@rec) {b false}))
+    (println (.pick_next rec))
+
+    (.add_event rec "d" "d" "d" false (- (now) 86400))
+    (.add_event rec "b" "b" "b" false (- (now) 86400))
+    (.add_event rec "c" "c" "c" true (- (now) 86400))
+
+    (.add_event rec "a" "a" "a" false)
     (println (.pick_next rec))
 
     ;(.pprint_model rec)
