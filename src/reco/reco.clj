@@ -7,9 +7,7 @@
              [add_event [java.util.Map, boolean, long] void]
              [pick_next [] java.util.Map]
              [new_session [] void]
-             [update_model [] void]
-             [pprint_model [] void]
-             [testing [] String]]
+             [update_model [] void]]
    :init init
    :constructors {[java.util.Collection] []}
    :require [clojure.java.jdbc :as jd]))
@@ -38,14 +36,25 @@
 (defn now []
   (quot (System/currentTimeMillis) 1000))
 
+(defn get-frequency [songs]
+  (loop [freq {}
+         songs-left songs]
+    (if (empty? songs-left)
+      freq
+      (let [artist ((first songs-left) "artist")]
+        (recur (update freq artist #(if (nil? %) 1 (inc %)))
+               (rest songs-left))))))
+
 (defn -init [songs]
   ; into turns the java hashmap into a normal hashmap or something. Otherwise,
   ; the get-in call in mk-candidate always returns 0.
-  [[] (atom {:songs (map #(into {} %) songs)
-             :sessions nil
-             :last-time 0
-             :model nil
-             :freshness {}})])
+  (let [converted-songs (map #(into {} %) songs)]
+    [[] (atom {:songs converted-songs
+               :artist-frequency (get-frequency converted-songs)
+               :sessions nil
+               :last-time 0
+               :model nil
+               :freshness {}})]))
 
 (defn -new_session [this]
   (swap! (.state this)
@@ -62,11 +71,17 @@
             (rest sessions)))))
 
 (defn mini-model [session]
-  (apply merge (map (fn [[a b]]
-                      {(set [a b])
-                       {:num (if (= (session a) (session b) false) 1 0)
-                        :den (if (= (session a) (session b) true) 0 1)}})
-                    (combinations (set (keys session)) 2))))
+  (->> (combinations (set (keys session)) 2)
+       (filter (fn [[a b]] (not= (session a) (session b) true)))
+       (map (fn [[a b]]
+              (let [score (if (= (session a) (session b) false) 1 0)]
+                [{(set [a b])
+                  {:num score
+                   :den 1}}
+                 {(set [(a "artist") (b "artist")])
+                  {:num score
+                   :den 1}}])))
+       flatten))
 
 (defn merge-models [models]
   (apply merge-with #(merge-with + %1 %2) models))
@@ -77,7 +92,8 @@
       :n (:den v)}])
 
 (defn mk-model [sessions]
-  (->> sessions (map mini-model) merge-models (map convert-cell) (into {})))
+  (->> sessions (map mini-model) flatten
+       merge-models (map convert-cell) (into {})))
 
 (defn -add_event
   ([this, mdata, skipped, timestamp]
@@ -97,7 +113,8 @@
                                          mdata timestamp)
                                   (:freshness state)))))))
   ([this, artist, album, title, skipped, timestamp]
-   (.add_event this {"artist" artist "album" album "title" title} skipped timestamp))
+   (.add_event this {"artist" artist "album" album "title" title}
+               skipped timestamp))
   ([this, artist, album, title, skipped]
    (.add_event this artist album title skipped (now))))
 
@@ -115,7 +132,7 @@
         r (rand total)]
     (loop [i 0 sum 0]
       (if (< r (+ (slices i) sum))
-        i
+        i 
         (recur (inc i) (+ (slices i) sum))))))
 
 (defn -update_model [this]
@@ -129,138 +146,204 @@
 (defn margin-of-error [score n]
   (* 1.28 (Math/sqrt (/ (* score (- 1 score)) (max n 1)))))
 
-(defn mk-candidate [candidate model freshness cur]
-  (let [songs (set (keys cur))
-        raw-mean (->> songs
-                      (map #(get-in model [(set [%1 candidate]) :score] 0))
-                      (reduce +))
-        n (->> songs
-               (map #(get-in model [(set [%1 candidate]) :n] 0))
-               (reduce +))
-        margin (* (margin-of-error raw-mean n) (count songs))
-        fresh-score (calc-freshness candidate freshness)
-        final-score (* (+ raw-mean margin) fresh-score)]
-    ;(dbg "candidate" candidate)
-    ;(dbg "raw-mean" raw-mean)
-    ;(dbg "n" n)
-    ;(dbg "margin" margin)
-    ;(dbg "fresh-score" fresh-score)
-    ;(dbg "final-score" final-score)
-  {:mdata candidate
-   :score final-score}))
+(defn get-sim-score [sim skipped]
+  (if (and skipped (< sim 0))
+    [0 0]
+    [(* sim (if skipped -1 1)) 1]))
 
-(defn -pick_next [this]
-  (let [model (:model @@this)
-        freshness (:freshness @@this)
-        cur (first (:sessions @@this))
-        universe (difference (set (:songs @@this)) (set (keys cur)))
-        candidates (->> universe
+(defn get-sim [model a b default]
+  (if (= a b)
+    1
+    (get-in model [(set [a b]) :score] default)))
+
+(defn get-content-mean [{cand-artist "artist"} model cur]
+  (as-> cur result
+    (map (fn [[song skipped]]
+           (first (get-sim-score (get-sim model (song "artist") cand-artist 1)
+                                 skipped)))
+         result)
+    (reduce + result)
+    (/ result (count cur))))
+
+(defn get-raw-mean [model candidate cur]
+  (as-> cur result
+    (map (fn [[song skipped]]
+           (get-sim-score (get-sim model song candidate 0)
+                          skipped))
+         result)
+    (apply map + result)
+    (apply vector result)
+    (update result 0 #(/ % (count cur)))))
+
+(defn mk-candidate [candidate model freshness cur]
+  (if (= (count cur) 0)
+    {:mdata candidate
+     :score 1}
+    (let [[raw-mean n] (get-raw-mean model candidate cur)
+          confidence (- 1 (/ 1 (Math/pow 1.5 n)))
+          content-mean (get-content-mean candidate model cur)
+          hybrid-mean (+ (* confidence raw-mean)
+                         (* (- 1 confidence) content-mean))
+          margin (/ 1 (Math/pow 1.1 n))
+          fresh-score (calc-freshness candidate freshness)
+          final-score (* (+ hybrid-mean margin) fresh-score)]
+      ;(dbg "raw-mean" raw-mean)
+      ;(dbg "n" n)
+      ;(dbg "confidence" confidence)
+      ;(dbg "content-mean" content-mean)
+      ;(dbg "hybrid-mean" hybrid-mean)
+      ;(dbg "margin" margin)
+      ;(dbg "fresh-score" fresh-score)
+      ;(dbg "final-score" final-score)
+      {:mdata candidate
+       :score final-score})))
+
+(defn candidate-key [candidate frequency]
+  [(:score candidate)
+   (frequency (get-in candidate [:mdata "artist"]))])
+
+(defn pick-next [model freshness cur songs frequency]
+  (let [candidates (->> (difference (set songs) (set (keys cur)))
                         (map #(mk-candidate % model freshness cur))
                         (filter #(< 0 (:score %)))
-                        (sort-by :score) reverse)]
-
+                        (sort-by #(candidate-key % frequency))
+                        reverse)]
     ;(dbg "current session" cur)
     ;(dbg "count candidates" (count candidates))
     ;(dbg "first 10 candidates" (take 10 candidates))
     (if (empty? candidates)
-      (rand-nth (:songs @@this))
+      (rand-nth songs)
       (:mdata (->> candidates (take 10) (map :score)
                    vec wrand (nth candidates))))))
 
+(defn -pick_next [this]
+  (pick-next (:model @@this)
+             (:freshness @@this)
+             (first (:sessions @@this))
+             (:songs @@this)
+             (:artist-frequency @@this)))
 
 (defn -deref [this]
   (.state this))
 
-(defn -testing [this] "hello there")
+(defn test= [actual expected]
+  (when (not= actual expected)
+    (print "expected: ")
+    (pprint expected)
+    (print "got: ")
+    (pprint actual)
+    (throw (new AssertionError "Test failed"))))
 
-(defn mk-comparator [model]
-  (fn [key1 key2]
-    (compare [(get-in model [key2 :n]) (get-in model [key2 :score])]
-             [(get-in model [key1 :n]) (get-in model [key1 :score])])))
 
-(defn -pprint_model [this]
-  (let [model (:model @@this)
-        freshness (:freshness @@this)
-        sorted (into (sorted-map-by (mk-comparator model)) model)
-        sessions (:sessions @@this)]
-    ;(println (count model) " items in model")
-    ;(println "candidate:")
-    ;(pprint (mk-candidate {"artist" "Lindsey Stirling"
-    ;                       "album" "Lindsey Stirling"
-    ;                       "title" "Crystallize"}
-    ;                      model
-    ;                      {{"artist" "Breaking Benjamin",
-    ;                        "album" "Dear Agony",
-    ;                        "title" "Give Me A Sign"}
-    ;                       false}))
-    ;(dbg "pick_next" (.pick_next this))
-    ;(println "top 10 least fresh items:")
-    ;(pprint (take 10 (reverse (sort-by last (vec freshness)))))
+(defn test-mini-model []
+  (assert (= (mini-model {a false
+                          b false
+                          c false
+                          d true})
+             '({#{{"artist" "c", "album" "c", "title" "c"}
+                  {"artist" "a", "album" "a", "title" "a"}}
+                {:num 1, :den 1}}
+               {#{"a" "c"} {:num 1, :den 1}}
+               {#{{"artist" "c", "album" "c", "title" "c"}
+                  {"artist" "d", "album" "d", "title" "d"}}
+                {:num 0, :den 1}}
+               {#{"d" "c"} {:num 0, :den 1}}
+               {#{{"artist" "c", "album" "c", "title" "c"}
+                  {"artist" "b", "album" "b", "title" "b"}}
+                {:num 1, :den 1}}
+               {#{"b" "c"} {:num 1, :den 1}}
+               {#{{"artist" "a", "album" "a", "title" "a"}
+                  {"artist" "d", "album" "d", "title" "d"}}
+                {:num 0, :den 1}}
+               {#{"d" "a"} {:num 0, :den 1}}
+               {#{{"artist" "a", "album" "a", "title" "a"}
+                  {"artist" "b", "album" "b", "title" "b"}}
+                {:num 1, :den 1}}
+               {#{"a" "b"} {:num 1, :den 1}}
+               {#{{"artist" "d", "album" "d", "title" "d"}
+                  {"artist" "b", "album" "b", "title" "b"}}
+                {:num 0, :den 1}}
+               {#{"d" "b"} {:num 0, :den 1}}))))
 
-    ;(pprint (filter #(contains? (first %) {"artist" "Breaking Benjamin",
-    ;                                       "album" "Dear Agony",
-    ;                                       "title" "Give Me A Sign"})
-    ;                model))))
-    ))
+(defn test-get-sim-score []
+  (for [[input expected]
+        [[[0.3 false] 0.3]
+         [[-0.3 true] 0]
+         [[0.3 true] -0.3]]]
+    (assert (= (apply get-sim-score input) expected))))
 
-(defn demo []
+(defn test-get-content-mean []
+  (test=
+    (get-content-mean a
+                      {#{"a" "b"} {:score 0.777 :n 1}
+                       #{"a" "c"} {:score 0.111 :n 1}}
+                      {b false
+                       c true})
+    0.333))
+
+(defn test-mk-candidate []
+  (test= (mk-candidate
+           a
+           {#{a b} {:score 0.777 :n 1}
+            #{a c} {:score 0.111 :n 1}
+            #{"a" "b"} {:score 0.5 :n 1}
+            #{"a" "c"} {:score 0.8 :n 1}}
+           {a (- (now) (* 60 60 24))}
+           {b false
+            c true})
+    {:mdata {"artist" "a", "album" "a", "title" "a"},
+     :score 0.5972146177769917}))
+
+(defn test-model []
   (let [rec (new reco.reco [a b c d e f g h])]
     (.add_event rec "a" "a" "a" true 2000)
     (.add_event rec "b" "b" "b" false 2000)
     (.add_event rec "c" "c" "c" false 2000)
-    (.add_event rec "d" "d" "d" false 2000)
-    (.add_event rec "e" "e" "e" false 2000)
-    (.add_event rec "f" "f" "f" false 2000)
 
     (.add_event rec "a" "a" "a" false 4000)
     (.add_event rec "b" "b" "b" false 4000)
-    (.add_event rec "c" "c" "c" false 4000)
-    (.add_event rec "d" "d" "d" false 4000)
-    (.add_event rec "e" "e" "e" false 4000)
-    (.add_event rec "g" "g" "g" false 4000)
-    (.add_event rec "h" "h" "h" true 4000)
-
-    (.add_event rec "a" "a" "a" false 6000)
-    (.add_event rec "b" "b" "b" false 6000)
-    (.add_event rec "c" "c" "c" false 6000)
-    (.add_event rec "d" "d" "d" false 6000)
 
     (.update_model rec)
 
-    (pprint (mk-candidate a (:model @@rec) (:freshness @@rec) {b false}))
-    (println (.pick_next rec))
+    (assert (= (:sessions @@rec)
+               '({{"artist" "a", "album" "a", "title" "a"} false,
+                  {"artist" "b", "album" "b", "title" "b"} false}
+                 {{"artist" "a", "album" "a", "title" "a"} true,
+                  {"artist" "b", "album" "b", "title" "b"} false,
+                  {"artist" "c", "album" "c", "title" "c"} false})))
+    (assert (= (:model @@rec)
+               {#{{"artist" "a", "album" "a", "title" "a"}
+                  {"artist" "b", "album" "b", "title" "b"}}
+                {:score 0N, :n 2},
+                #{"a" "b"} {:score 0N, :n 2},
+                #{{"artist" "c", "album" "c", "title" "c"}
+                  {"artist" "a", "album" "a", "title" "a"}}
+                {:score -1, :n 1},
+                #{"a" "c"} {:score -1, :n 1},
+                #{{"artist" "c", "album" "c", "title" "c"}
+                  {"artist" "b", "album" "b", "title" "b"}}
+                {:score 1, :n 1},
+                #{"b" "c"} {:score 1, :n 1}}))
+    (assert (= (:freshness @@rec)
+               {{"artist" "b", "album" "b", "title" "b"} 4000,
+                {"artist" "c", "album" "c", "title" "c"} 2000,
+                {"artist" "a", "album" "a", "title" "a"} 4000}))))
 
-    (.add_event rec "d" "d" "d" false (- (now) 86400))
-    (.add_event rec "b" "b" "b" false (- (now) 86400))
-    (.add_event rec "c" "c" "c" true (- (now) 86400))
-
-    (.add_event rec "a" "a" "a" false)
-    (println (.pick_next rec))
-
-    ;(.pprint_model rec)
-
-    ;(let [sessions (:sessions @@rec)]
-    ;  (println (sim sessions a b))
-    ;  (println (sim sessions b c))
-    ;  (println (sim sessions f g)))
-
-    ; these recommendations will be either e, f or g.
-    ; e has the highest probability of being picked because it's in both
-    ; previous sessions.
-    ; g is next because sessions 1 and 2 are more similar than sessions 0 and 2.
-    ; f is the least likely prediction.
-    ;(println (.pick_next rec))
-    ;(println (.pick_next rec))
-    ;(println (.pick_next rec))
-    ;(println (.pick_next rec))
-    ;(println (.pick_next rec))
-    ;(println (.pick_next rec))
-    ;(println (.pick_next rec))
-    ;(println (.pick_next rec))
-    ;(println (.pick_next rec))
-
-    ))
+(defn test-pick-next []
+  (let [library (for [[artist n] [["a" 5] ["b" 10] ["c" 7]]
+                      title (range n)]
+                  {"artist" artist "album" artist "title" title})
+        rec (new reco.reco library)]
+    (.update_model rec)
+    (test=
+      ((.pick_next rec) "artist")
+      "b")))
 
 (defn -main [& args]
-  (demo))
-  
+  (test-mini-model)
+  (test-get-sim-score)
+  (test-get-content-mean)
+  (test-mk-candidate)
+  (test-model)
+  (test-pick-next)
+  (println "all tests pass"))
