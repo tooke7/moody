@@ -374,14 +374,14 @@
 ;               (rest actions))))))
 
 (defn -main [& args]
-  ;(test-mini-model)
-  ;(test-get-sim-score)
-  ;(test-get-content-mean)
-  ;(test-mk-candidate)
-  ;(test-model)
-  ;(test-pick-next [["a" 5] ["b" 10] ["c" 7]] nil "b")
-  ;(test-pick-next [["a" 2] ["b" 1]] [true] "b")
-  ;(test-pick-next [["a" 3] ["b" 1]] [false false] "b")
+  (test-mini-model)
+  (test-get-sim-score)
+  (test-get-content-mean)
+  (test-mk-candidate)
+  (test-model)
+  (test-pick-next [["a" 5] ["b" 10] ["c" 7]] nil "b")
+  (test-pick-next [["a" 2] ["b" 1]] [true] "b")
+  (test-pick-next [["a" 3] ["b" 1]] [false false] "b")
 
   ;(demo-real-data)
   (println "all tests pass"))
