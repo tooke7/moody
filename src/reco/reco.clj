@@ -9,12 +9,13 @@
              [new_session [] void]
              [update_model [] void]]
    :init init
-   :constructors {[java.util.Collection] []}
-   :require [clojure.java.jdbc :as jd]))
+   :constructors {[java.util.Collection] []}))
 
 (use '[clojure.set :only [intersection union difference]])
 (use '[clojure.math.combinatorics :only [combinations]])
 (use '[clojure.pprint :only [pprint]])
+
+(def debug false)
 
 (def ses-threshold (* 30 60))
 (def k 5)
@@ -27,12 +28,6 @@
 (def g {"artist" "g" "album" "g" "title" "g"})
 (def h {"artist" "h" "album" "h" "title" "h"})
 
-(def db
-  {:classname   "org.sqlite.JDBC"
-   :subprotocol "sqlite"
-   :subname     "moody.db"
-   })
-
 (defn now []
   (quot (System/currentTimeMillis) 1000))
 
@@ -40,7 +35,7 @@
   (loop [freq {}
          songs-left songs]
     (if (empty? songs-left)
-      freq
+      (assoc freq "<unknown>" 1 nil 1)
       (let [artist ((first songs-left) "artist")]
         (recur (update freq artist #(if (nil? %) 1 (inc %)))
                (rest songs-left))))))
@@ -51,9 +46,9 @@
   (let [converted-songs (map #(into {} %) songs)]
     [[] (atom {:songs converted-songs
                :artist-frequency (get-frequency converted-songs)
-               :sessions nil
+               :sessions '()
                :last-time 0
-               :model nil
+               :model {}
                :freshness {}})]))
 
 (defn -new_session [this]
@@ -119,8 +114,9 @@
    (.add_event this artist album title skipped (now))))
 
 (defn dbg [desc arg]
-  (print (str desc ": "))
-  (pprint arg)
+  (when debug
+    (print (str desc ": "))
+    (pprint arg))
   arg)
 
 (defn wrand 
@@ -140,40 +136,50 @@
          (fn [state]
            (assoc state :model (mk-model (:sessions state))))))
 
-(defn calc-freshness [mdata freshness]
-  (- 1 (Math/exp (/ (- (get freshness mdata 0) (now)) 86400))))
+(defn calc-freshness [mdata freshness cur]
+  (let [count-artist? (fn [[key-mdata skipped]]
+                        (and (not skipped)
+                             (= (mdata "artist")
+                                (key-mdata "artist"))))
+        artist-occurrences (count (filter count-artist? cur))]
+    ; Penalize the song if we've heard it recently. Also penalize if we've
+    ; already played at least two songs from the same artist in the current
+    ; session.
+    (* (- 1 (Math/exp (/ (- (get freshness mdata 0) (now)) 86400)))
+       (/ 1 (Math/pow 2 (max 0 (- artist-occurrences 1)))))))
 
 (defn margin-of-error [score n]
   (* 1.28 (Math/sqrt (/ (* score (- 1 score)) (max n 1)))))
 
 (defn get-sim-score [sim skipped]
-  (if (and skipped (< sim 0))
+  (if (or (nil? sim) (and skipped (< sim 0)))
     [0 0]
     [(* sim (if skipped -1 1)) 1]))
 
-(defn get-sim [model a b default]
+(defn get-sim [model a b]
   (if (= a b)
     1
-    (get-in model [(set [a b]) :score] default)))
+    (get-in model [(set [a b]) :score])))
 
 (defn get-content-mean [{cand-artist "artist"} model cur]
-  (as-> cur result
-    (map (fn [[song skipped]]
-           (first (get-sim-score (get-sim model (song "artist") cand-artist 1)
-                                 skipped)))
-         result)
-    (reduce + result)
-    (/ result (count cur))))
+  (let [[mean n] (as-> cur result
+                   (map (fn [[song skipped]]
+                          (get-sim-score (get-sim model (song "artist") cand-artist)
+                                         skipped))
+                        result)
+                   (apply map + result))]
+    ; the +1's give each artist pair a default similarity of 1.
+    (/ (+ 1 mean) (+ 1 n))))
 
 (defn get-raw-mean [model candidate cur]
   (as-> cur result
     (map (fn [[song skipped]]
-           (get-sim-score (get-sim model song candidate 0)
+           (get-sim-score (get-sim model song candidate)
                           skipped))
          result)
     (apply map + result)
     (apply vector result)
-    (update result 0 #(/ % (count cur)))))
+    (update result 0 #(/ % (max 1 (last result))))))
 
 (defn mk-candidate [candidate model freshness cur]
   (if (= (count cur) 0)
@@ -185,16 +191,18 @@
           hybrid-mean (+ (* confidence raw-mean)
                          (* (- 1 confidence) content-mean))
           margin (/ 1 (Math/pow 1.1 n))
-          fresh-score (calc-freshness candidate freshness)
+          fresh-score (calc-freshness candidate freshness cur)
           final-score (* (+ hybrid-mean margin) fresh-score)]
-      ;(dbg "raw-mean" raw-mean)
-      ;(dbg "n" n)
-      ;(dbg "confidence" confidence)
-      ;(dbg "content-mean" content-mean)
-      ;(dbg "hybrid-mean" hybrid-mean)
-      ;(dbg "margin" margin)
-      ;(dbg "fresh-score" fresh-score)
-      ;(dbg "final-score" final-score)
+      (dbg "candidate" candidate)
+      (dbg "raw-mean" raw-mean)
+      (dbg "n" n)
+      (dbg "confidence" confidence)
+      (dbg "content-mean" content-mean)
+      (dbg "hybrid-mean" hybrid-mean)
+      (dbg "margin" margin)
+      (dbg "fresh-score" fresh-score)
+      (dbg "final-score" final-score)
+      (when debug (println))
       {:mdata candidate
        :score final-score})))
 
@@ -213,8 +221,11 @@
     ;(dbg "first 10 candidates" (take 10 candidates))
     (if (empty? candidates)
       (rand-nth songs)
-      (:mdata (->> candidates (take 10) (map :score)
-                   vec wrand (nth candidates))))))
+      (do
+        (dbg "score" (:score (first candidates)))
+        (:mdata (first candidates))))))
+      ;(:mdata (->> candidates (take 10) (map :score)
+      ;             vec wrand (nth candidates))))))
 
 (defn -pick_next [this]
   (pick-next (:model @@this)
@@ -279,7 +290,7 @@
                        #{"a" "c"} {:score 0.111 :n 1}}
                       {b false
                        c true})
-    0.333))
+    0.5553333333333333))
 
 (defn test-mk-candidate []
   (test= (mk-candidate
@@ -292,7 +303,7 @@
            {b false
             c true})
     {:mdata {"artist" "a", "album" "a", "title" "a"},
-     :score 0.5972146177769917}))
+     :score 0.7049092315033385}))
 
 (defn test-model []
   (let [rec (new reco.reco [a b c d e f g h])]
@@ -329,21 +340,48 @@
                 {"artist" "c", "album" "c", "title" "c"} 2000,
                 {"artist" "a", "album" "a", "title" "a"} 4000}))))
 
-(defn test-pick-next []
-  (let [library (for [[artist n] [["a" 5] ["b" 10] ["c" 7]]
+(defn test-pick-next [artist-frequency skip-sequence next-artist]
+  (let [library (for [[artist n] artist-frequency
                       title (range n)]
                   {"artist" artist "album" artist "title" title})
         rec (new reco.reco library)]
-    (.update_model rec)
+    (doseq [action skip-sequence]
+      (.add_event rec (.pick_next rec) action (now)))
     (test=
       ((.pick_next rec) "artist")
-      "b")))
+      next-artist)))
+
+;(defn demo-real-data []
+;;(:require [clojure.java.jdbc :as jd])
+;  (let [db {:classname   "org.sqlite.JDBC"
+;            :subprotocol "sqlite"
+;            :subname     "moody.db"}
+;        library (map #(->> %
+;                           (filter (fn [[k v]] (not= k :_id)))
+;                           (map (fn [[k v]] [(name k) v]))
+;                           (into {}))
+;                     (jd/query db "select * from songs"))
+;        rec (new reco.reco library)]
+;    (.update_model rec)
+;    (loop [next-song (.pick_next rec)
+;           actions [false false true true false false]]
+;      (when (not (empty? actions))
+;        (pprint next-song)
+;        (println (if (first actions) "skip" "listen"))
+;        (println)
+;        (.add_event rec next-song (first actions) (now))
+;        (recur (.pick_next rec)
+;               (rest actions))))))
 
 (defn -main [& args]
-  (test-mini-model)
-  (test-get-sim-score)
-  (test-get-content-mean)
-  (test-mk-candidate)
-  (test-model)
-  (test-pick-next)
+  ;(test-mini-model)
+  ;(test-get-sim-score)
+  ;(test-get-content-mean)
+  ;(test-mk-candidate)
+  ;(test-model)
+  ;(test-pick-next [["a" 5] ["b" 10] ["c" 7]] nil "b")
+  ;(test-pick-next [["a" 2] ["b" 1]] [true] "b")
+  ;(test-pick-next [["a" 3] ["b" 1]] [false false] "b")
+
+  ;(demo-real-data)
   (println "all tests pass"))
