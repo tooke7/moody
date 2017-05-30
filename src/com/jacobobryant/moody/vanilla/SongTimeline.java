@@ -686,11 +686,11 @@ public final class SongTimeline {
                 //query.mode = MODE_ENQUEUE_AS_NEXT;
                 query.mode = MODE_FLUSH_AND_PLAY_NEXT;
                 int num = addSongs(mContext, query);
-                if (num == 0) {
-                    Log.e(C.TAG, "couldn't add song: " + next);
-                } else {
+                if (num != 0) {
                     break;
                 }
+                Log.e(C.TAG, "couldn't add song: " + next);
+                moody.rec.add_event(next.artist, next.album, next.title, true);
             } while (true);
         }
 

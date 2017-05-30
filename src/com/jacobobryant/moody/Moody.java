@@ -141,6 +141,9 @@ public class Moody {
 
         db.close();
 
+        Log.d(C.TAG, "updating model");
+        rec.update_model();
+        Log.d(C.TAG, "finished updating model");
     }
 
     public void update(Song last_song, boolean skipped) {
@@ -200,7 +203,7 @@ public class Moody {
         //Log.d(C.TAG, "New alg choice: " + choice);
         //return choice;
 
-        float CONTROL_PROB = 0.35f;
+        float CONTROL_PROB = 0f;
         double OLD_PROB = CONTROL_PROB + (1.0 - CONTROL_PROB) / 2;
         if (ratios == null) {
             throw new RuntimeException("init() hasn't been called");
@@ -296,10 +299,6 @@ public class Moody {
     public void test() {
         //try {
         Log.d(C.TAG, "begin test");
-
-        //SyncAdapter.sync(context);
-        Log.d(C.TAG, rec.testing());
-
 
         Log.d(C.TAG, "finish test");
         //} catch (IOException e) {
