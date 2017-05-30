@@ -14,6 +14,7 @@
 (use '[clojure.set :only [intersection union difference]])
 (use '[clojure.math.combinatorics :only [combinations]])
 (use '[clojure.pprint :only [pprint]])
+(use '[clojure.java.jdbc :as jd])
 
 (def debug false)
 
@@ -44,11 +45,11 @@
   ; into turns the java hashmap into a normal hashmap or something. Otherwise,
   ; the get-in call in mk-candidate always returns 0.
   (let [converted-songs (map #(into {} %) songs)]
-    [[] (atom {:songs converted-songs
+    [[] (atom {:songs (vec converted-songs)
                :artist-frequency (get-frequency converted-songs)
                :sessions '()
                :last-time 0
-               :model {}
+               :model nil
                :freshness {}})]))
 
 (defn -new_session [this]
@@ -75,8 +76,7 @@
                    :den 1}}
                  {(set [(a "artist") (b "artist")])
                   {:num score
-                   :den 1}}])))
-       flatten))
+                   :den 1}}])))))
 
 (defn merge-models [models]
   (apply merge-with #(merge-with + %1 %2) models))
@@ -146,7 +146,7 @@
     ; already played at least two songs from the same artist in the current
     ; session.
     (* (- 1 (Math/exp (/ (- (get freshness mdata 0) (now)) 86400)))
-       (/ 1 (Math/pow 2 (max 0 (- artist-occurrences 1)))))))
+       (/ 1 (Math/pow 1.1 (max 0 (- artist-occurrences 1)))))))
 
 (defn margin-of-error [score n]
   (* 1.28 (Math/sqrt (/ (* score (- 1 score)) (max n 1)))))
@@ -181,28 +181,38 @@
     (apply vector result)
     (update result 0 #(/ % (max 1 (last result))))))
 
+(defn calc-confidence [n]
+  (- 1 (/ 1 (Math/pow 1.5 n))))
+(def calc-confidence (memoize calc-confidence))
+
+(defn calc-margin [n]
+  (/ 1 (Math/pow 1.1 n)))
+(def calc-margin (memoize calc-margin))
+
 (defn mk-candidate [candidate model freshness cur]
   (if (= (count cur) 0)
     {:mdata candidate
      :score 1}
     (let [[raw-mean n] (get-raw-mean model candidate cur)
-          confidence (- 1 (/ 1 (Math/pow 1.5 n)))
+          confidence (calc-confidence n)
           content-mean (get-content-mean candidate model cur)
           hybrid-mean (+ (* confidence raw-mean)
                          (* (- 1 confidence) content-mean))
-          margin (/ 1 (Math/pow 1.1 n))
+          margin (calc-margin n)
           fresh-score (calc-freshness candidate freshness cur)
           final-score (* (+ hybrid-mean margin) fresh-score)]
-      (dbg "candidate" candidate)
-      (dbg "raw-mean" raw-mean)
-      (dbg "n" n)
-      (dbg "confidence" confidence)
-      (dbg "content-mean" content-mean)
-      (dbg "hybrid-mean" hybrid-mean)
-      (dbg "margin" margin)
-      (dbg "fresh-score" fresh-score)
-      (dbg "final-score" final-score)
-      (when debug (println))
+
+      ;(dbg "candidate" candidate)
+      ;(dbg "raw-mean" raw-mean)
+      ;(dbg "n" n)
+      ;(dbg "confidence" confidence)
+      ;(dbg "content-mean" content-mean)
+      ;(dbg "hybrid-mean" hybrid-mean)
+      ;(dbg "margin" margin)
+      ;(dbg "fresh-score" fresh-score)
+      ;(dbg "final-score" final-score)
+      ;(when debug (println))
+
       {:mdata candidate
        :score final-score})))
 
@@ -221,11 +231,9 @@
     ;(dbg "first 10 candidates" (take 10 candidates))
     (if (empty? candidates)
       (rand-nth songs)
-      (do
-        (dbg "score" (:score (first candidates)))
-        (:mdata (first candidates))))))
-      ;(:mdata (->> candidates (take 10) (map :score)
-      ;             vec wrand (nth candidates))))))
+        ;(:mdata (first candidates))))))
+      (:mdata (->> candidates (take 5) (map :score)
+                   vec wrand (nth candidates))))))
 
 (defn -pick_next [this]
   (pick-next (:model @@this)
@@ -351,37 +359,56 @@
       ((.pick_next rec) "artist")
       next-artist)))
 
-;(defn demo-real-data []
-;;(:require [clojure.java.jdbc :as jd])
-;  (let [db {:classname   "org.sqlite.JDBC"
-;            :subprotocol "sqlite"
-;            :subname     "moody.db"}
-;        library (map #(->> %
-;                           (filter (fn [[k v]] (not= k :_id)))
-;                           (map (fn [[k v]] [(name k) v]))
-;                           (into {}))
-;                     (jd/query db "select * from songs"))
-;        rec (new reco.reco library)]
-;    (.update_model rec)
-;    (loop [next-song (.pick_next rec)
-;           actions [false false true true false false]]
-;      (when (not (empty? actions))
-;        (pprint next-song)
-;        (println (if (first actions) "skip" "listen"))
-;        (println)
-;        (.add_event rec next-song (first actions) (now))
-;        (recur (.pick_next rec)
-;               (rest actions))))))
+(defn wait []
+  (print "Press Enter to continue")
+  (flush)
+  (read-line))
+
+(defn demo-real-data []
+  (println "adding library")
+  (let [db {:classname   "org.sqlite.JDBC"
+            :subprotocol "sqlite"
+            :subname     "moody.db"}
+        library (map #(->> %
+                           (filter (fn [[k v]] (not= k :_id)))
+                           (map (fn [[k v]] [(name k) v]))
+                           (into {}))
+                     (jd/query db "select * from songs"))
+        rec (new reco.reco library)
+        parser (new java.text.SimpleDateFormat "yyyy-MM-dd HH:mm:ss")]
+    (println "adding events")
+    (doseq [{timestamp :time title :title artist :artist album :album
+             skipped :skipped}
+            (jd/query db "select time, title, artist, album, skipped from songs s
+                         join events e on s._id = e.song_id order by time asc")]
+      (let [seconds (.getTime (.parse parser timestamp))]
+        (.add_event rec artist album title
+                    (if (= skipped 1) true false) seconds)))
+    (println "updating model")
+    (.update_model rec)
+    (println "making recommendations")
+    ;(wait)
+    (loop [next-song (.pick_next rec)
+           actions (repeat 100 true)]
+      (println "next one")
+      (when (not (empty? actions))
+        ;(pprint next-song)
+        ;(println (if (first actions) "skip" "listen"))
+        ;(println)
+        (.add_event rec next-song (first actions) (now))
+        (recur (.pick_next rec)
+               (rest actions))))))
 
 (defn -main [& args]
-  (test-mini-model)
-  (test-get-sim-score)
-  (test-get-content-mean)
-  (test-mk-candidate)
-  (test-model)
-  (test-pick-next [["a" 5] ["b" 10] ["c" 7]] nil "b")
-  (test-pick-next [["a" 2] ["b" 1]] [true] "b")
-  (test-pick-next [["a" 3] ["b" 1]] [false false] "b")
+  (println "starting up")
+  ;(test-mini-model)
+  ;(test-get-sim-score)
+  ;(test-get-content-mean)
+  ;(test-mk-candidate)
+  ;(test-model)
+  ;(test-pick-next [["a" 5] ["b" 10] ["c" 7]] nil "b")
+  ;(test-pick-next [["a" 2] ["b" 1]] [true] "b")
+  ;(test-pick-next [["a" 3] ["b" 1]] [false false] "b")
 
-  ;(demo-real-data)
+  (demo-real-data)
   (println "all tests pass"))
