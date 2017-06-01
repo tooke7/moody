@@ -90,23 +90,24 @@
   (->> sessions (map mini-model) flatten
        merge-models (map convert-cell) (into {})))
 
+(defmacro assoc-if [value condition & args]
+  (list 'if condition
+        (concat ['assoc-in value] args)
+        value))
+
 (defn -add_event
   ([this, mdata, skipped, timestamp]
    (swap! (.state this)
           (fn [state]
             (let [new-session (> timestamp (+ (:last-time state) ses-threshold))]
-              (assoc state :last-time timestamp
-                     :sessions (ses-append (:sessions state)
-                                           mdata
-                                           skipped
-                                           new-session)
-                     :model (if (and new-session (:model state))
-                              (mk-model (:sessions state))
-                              (:model state))
-                     :freshness (if-not skipped
-                                  (assoc (:freshness state)
-                                         mdata timestamp)
-                                  (:freshness state)))))))
+              (-> state
+                  (assoc :last-time timestamp)
+                  (update :sessions ses-append mdata skipped new-session)
+                  (assoc-if (and new-session (:model state))
+                            [:model] (mk-model (:sessions state)))
+                  (assoc-if (not skipped)
+                            [:freshness mdata] timestamp)
+                  (assoc :candidates (update-candidates state mdata skipped)))))))
   ([this, artist, album, title, skipped, timestamp]
    (.add_event this {"artist" artist "album" album "title" title}
                skipped timestamp))
@@ -131,11 +132,6 @@
         i 
         (recur (inc i) (+ (slices i) sum))))))
 
-(defn -update_model [this]
-  (swap! (.state this)
-         (fn [state]
-           (assoc state :model (mk-model (:sessions state))))))
-
 (defn calc-freshness [mdata freshness cur]
   (let [count-artist? (fn [[key-mdata skipped]]
                         (and (not skipped)
@@ -147,6 +143,44 @@
     ; session.
     (* (- 1 (Math/exp (/ (- (get freshness mdata 0) (now)) 86400)))
        (/ 1 (Math/pow 1.1 (max 0 (- artist-occurrences 1)))))))
+
+(defn update-candidates
+  [{candidates :candidates model :model freshness :freshness
+    artist-frequency :artist-frequency}
+   mdata skipped]
+
+
+
+
+
+(defn init-candidates [songs freshness]
+  (zipmap songs (map (fn [song]
+                       {:freshness (- 1 (Math/exp (/ (- (get freshness song 0)
+                                                        (now)) 86400)))
+                        :score 1
+                        :n 1
+                        :content-score 1
+                        :content-n 1})
+                     songs)))
+
+(defn -update_model [this]
+  (swap! (.state this)
+         (fn [state]
+           (assoc state :model (mk-model (:sessions state))
+                  :candidates (init-candidates (:songs state)
+                                               (:freshness state))))))
+
+;(defn calc-freshness [mdata freshness cur]
+;  (let [count-artist? (fn [[key-mdata skipped]]
+;                        (and (not skipped)
+;                             (= (mdata "artist")
+;                                (key-mdata "artist"))))
+;        artist-occurrences (count (filter count-artist? cur))]
+;    ; Penalize the song if we've heard it recently. Also penalize if we've
+;    ; already played at least two songs from the same artist in the current
+;    ; session.
+;    (* (- 1 (Math/exp (/ (- (get freshness mdata 0) (now)) 86400)))
+;       (/ 1 (Math/pow 1.1 (max 0 (- artist-occurrences 1)))))))
 
 (defn margin-of-error [score n]
   (* 1.28 (Math/sqrt (/ (* score (- 1 score)) (max n 1)))))
