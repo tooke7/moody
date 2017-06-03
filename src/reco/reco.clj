@@ -185,8 +185,8 @@
   (swap! (.state this)
          (fn [state]
            (assoc state :model (mk-model (:sessions state))
-                  :candidates (init-candidates (:songs state)
-                                               (:freshness state))))))
+                  :candidates (doall (init-candidates (:songs state)
+                                                      (:freshness state)))))))
 
 (defn candidate-key [candidate frequency]
   [(:final-score candidate)
