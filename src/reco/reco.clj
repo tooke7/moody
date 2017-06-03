@@ -14,7 +14,7 @@
 (use '[clojure.set :only [intersection union difference]])
 (use '[clojure.math.combinatorics :only [combinations]])
 (use '[clojure.pprint :only [pprint]])
-(use '[clojure.java.jdbc :as jd])
+;(use '[clojure.java.jdbc :as jd])
 
 (def debug false)
 
@@ -50,7 +50,8 @@
                :sessions '()
                :last-time 0
                :model nil
-               :freshness {}})]))
+               :freshness {}
+               :candidates nil})]))
 
 (defn -new_session [this]
   (swap! (.state this)
@@ -90,24 +91,71 @@
   (->> sessions (map mini-model) flatten
        merge-models (map convert-cell) (into {})))
 
-(defmacro assoc-if [value condition & args]
-  (list 'if condition
-        (concat ['assoc-in value] args)
-        value))
+(defn update-score [old-score old-n sim]
+  (let [new-n (inc old-n)
+        new-score (/ (+ (* old-score old-n) sim) new-n)]
+    [new-score new-n]))
+
+(defn calc-margin [n]
+  (/ 1 (Math/pow 1.1 n)))
+(def calc-margin (memoize calc-margin))
+
+(defn calc-confidence [n]
+  (- 1 (/ 1 (Math/pow 1.5 n))))
+(def calc-confidence (memoize calc-confidence))
+
+(defn calc-final-score [score n content-score freshness]
+  (let [confidence (calc-confidence n)
+        hybrid-mean (+ (* confidence score)
+                       (* (- 1 confidence) content-score))
+        margin (calc-margin n)
+        final-score (* (+ hybrid-mean margin) freshness)]
+    final-score))
+
+(defn update-final-score [data]
+  (let [{score :score n :n content-score :content-score freshness :freshness} data]
+    (assoc data :final-score (calc-final-score score n content-score freshness))))
+
+(defn sim-score [model a b skipped]
+  (let [sim (if (= a b) 1 (get-in model [(set [a b]) :score]))]
+    (if (or (nil? sim) (and skipped (< sim 0)))
+      nil
+      (* sim (if skipped -1 1)))))
+
+(defn update-candidates
+  [{candidates :candidates model :model
+    artist-frequency :artist-frequency}
+   mdata skipped]
+  (map (fn [data]
+         (let [sim (sim-score model mdata (:mdata data) skipped)
+               content-sim (sim-score model (mdata "artist")
+                                      (get-in data [:mdata "artist"])
+                                      skipped)
+               assoc-score (fn [result score-key n-key sim]
+                             (let [[new-score new-n]
+                                   (update-score (score-key data) (n-key data) sim)]
+                               (assoc result score-key new-score n-key new-n)))]
+           (cond-> data
+             sim (assoc-score :score :n sim)
+             content-sim (assoc-score :content-score :content-n content-sim)
+             (or sim content-sim) update-final-score)))
+       (remove #(= (:mdata %) mdata) candidates)))
 
 (defn -add_event
   ([this, mdata, skipped, timestamp]
    (swap! (.state this)
           (fn [state]
             (let [new-session (> timestamp (+ (:last-time state) ses-threshold))]
-              (-> state
-                  (assoc :last-time timestamp)
-                  (update :sessions ses-append mdata skipped new-session)
-                  (assoc-if (and new-session (:model state))
-                            [:model] (mk-model (:sessions state)))
-                  (assoc-if (not skipped)
-                            [:freshness mdata] timestamp)
-                  (assoc :candidates (update-candidates state mdata skipped)))))))
+              (cond-> state
+                  true (assoc :last-time timestamp)
+                  true (update :sessions ses-append mdata skipped new-session)
+
+                  (and new-session (:model state))
+                  (assoc :model (mk-model (:sessions state)))
+
+                  (not skipped) (assoc-in [:freshness mdata] timestamp)
+                  (:model state) (assoc :candidates (update-candidates
+                                                      state mdata skipped)))))))
   ([this, artist, album, title, skipped, timestamp]
    (.add_event this {"artist" artist "album" album "title" title}
                skipped timestamp))
@@ -120,48 +168,18 @@
     (pprint arg))
   arg)
 
-(defn wrand 
-  "given a vector of slice sizes, returns the index of a slice given a
-  random spin of a roulette wheel with compartments proportional to
-  slices."
-  [slices]
-  (let [total (reduce + slices)
-        r (rand total)]
-    (loop [i 0 sum 0]
-      (if (< r (+ (slices i) sum))
-        i 
-        (recur (inc i) (+ (slices i) sum))))))
-
-(defn calc-freshness [mdata freshness cur]
-  (let [count-artist? (fn [[key-mdata skipped]]
-                        (and (not skipped)
-                             (= (mdata "artist")
-                                (key-mdata "artist"))))
-        artist-occurrences (count (filter count-artist? cur))]
-    ; Penalize the song if we've heard it recently. Also penalize if we've
-    ; already played at least two songs from the same artist in the current
-    ; session.
-    (* (- 1 (Math/exp (/ (- (get freshness mdata 0) (now)) 86400)))
-       (/ 1 (Math/pow 1.1 (max 0 (- artist-occurrences 1)))))))
-
-(defn update-candidates
-  [{candidates :candidates model :model freshness :freshness
-    artist-frequency :artist-frequency}
-   mdata skipped]
-
-
-
-
-
 (defn init-candidates [songs freshness]
-  (zipmap songs (map (fn [song]
-                       {:freshness (- 1 (Math/exp (/ (- (get freshness song 0)
-                                                        (now)) 86400)))
-                        :score 1
-                        :n 1
-                        :content-score 1
-                        :content-n 1})
-                     songs)))
+  (map (fn [song]
+         (let [freshness (- 1 (Math/exp (/ (- (get freshness song 0)
+                                              (now)) 86400)))]
+           {:mdata song
+            :freshness freshness
+            :score 1/2
+            :n 1
+            :content-score 1/2
+            :content-n 1
+            :final-score (calc-final-score 1/2 1 1/2 freshness)}))
+       songs))
 
 (defn -update_model [this]
   (swap! (.state this)
@@ -170,111 +188,22 @@
                   :candidates (init-candidates (:songs state)
                                                (:freshness state))))))
 
-;(defn calc-freshness [mdata freshness cur]
-;  (let [count-artist? (fn [[key-mdata skipped]]
-;                        (and (not skipped)
-;                             (= (mdata "artist")
-;                                (key-mdata "artist"))))
-;        artist-occurrences (count (filter count-artist? cur))]
-;    ; Penalize the song if we've heard it recently. Also penalize if we've
-;    ; already played at least two songs from the same artist in the current
-;    ; session.
-;    (* (- 1 (Math/exp (/ (- (get freshness mdata 0) (now)) 86400)))
-;       (/ 1 (Math/pow 1.1 (max 0 (- artist-occurrences 1)))))))
-
-(defn margin-of-error [score n]
-  (* 1.28 (Math/sqrt (/ (* score (- 1 score)) (max n 1)))))
-
-(defn get-sim-score [sim skipped]
-  (if (or (nil? sim) (and skipped (< sim 0)))
-    [0 0]
-    [(* sim (if skipped -1 1)) 1]))
-
-(defn get-sim [model a b]
-  (if (= a b)
-    1
-    (get-in model [(set [a b]) :score])))
-
-(defn get-content-mean [{cand-artist "artist"} model cur]
-  (let [[mean n] (as-> cur result
-                   (map (fn [[song skipped]]
-                          (get-sim-score (get-sim model (song "artist") cand-artist)
-                                         skipped))
-                        result)
-                   (apply map + result))]
-    ; the +1's give each artist pair a default similarity of 1.
-    (/ (+ 1 mean) (+ 1 n))))
-
-(defn get-raw-mean [model candidate cur]
-  (as-> cur result
-    (map (fn [[song skipped]]
-           (get-sim-score (get-sim model song candidate)
-                          skipped))
-         result)
-    (apply map + result)
-    (apply vector result)
-    (update result 0 #(/ % (max 1 (last result))))))
-
-(defn calc-confidence [n]
-  (- 1 (/ 1 (Math/pow 1.5 n))))
-(def calc-confidence (memoize calc-confidence))
-
-(defn calc-margin [n]
-  (/ 1 (Math/pow 1.1 n)))
-(def calc-margin (memoize calc-margin))
-
-(defn mk-candidate [candidate model freshness cur]
-  (if (= (count cur) 0)
-    {:mdata candidate
-     :score 1}
-    (let [[raw-mean n] (get-raw-mean model candidate cur)
-          confidence (calc-confidence n)
-          content-mean (get-content-mean candidate model cur)
-          hybrid-mean (+ (* confidence raw-mean)
-                         (* (- 1 confidence) content-mean))
-          margin (calc-margin n)
-          fresh-score (calc-freshness candidate freshness cur)
-          final-score (* (+ hybrid-mean margin) fresh-score)]
-
-      ;(dbg "candidate" candidate)
-      ;(dbg "raw-mean" raw-mean)
-      ;(dbg "n" n)
-      ;(dbg "confidence" confidence)
-      ;(dbg "content-mean" content-mean)
-      ;(dbg "hybrid-mean" hybrid-mean)
-      ;(dbg "margin" margin)
-      ;(dbg "fresh-score" fresh-score)
-      ;(dbg "final-score" final-score)
-      ;(when debug (println))
-
-      {:mdata candidate
-       :score final-score})))
-
 (defn candidate-key [candidate frequency]
-  [(:score candidate)
+  [(:final-score candidate)
    (frequency (get-in candidate [:mdata "artist"]))])
 
-(defn pick-next [model freshness cur songs frequency]
-  (let [candidates (->> (difference (set songs) (set (keys cur)))
-                        (map #(mk-candidate % model freshness cur))
-                        (filter #(< 0 (:score %)))
-                        (sort-by #(candidate-key % frequency))
-                        reverse)]
-    ;(dbg "current session" cur)
-    ;(dbg "count candidates" (count candidates))
-    ;(dbg "first 10 candidates" (take 10 candidates))
-    (if (empty? candidates)
-      (rand-nth songs)
-        ;(:mdata (first candidates))))))
-      (:mdata (->> candidates (take 5) (map :score)
-                   vec wrand (nth candidates))))))
+(defn max-by
+  ([k x] x)
+  ([k x y] (if (> (compare (k x) (k y)) 0) x y))
+  ([k x y & more]
+   (reduce #(max-by k %1 %2) (max-by k x y) more)))
+
+(defn pick-next
+  [{candidates :candidates frequency :artist-frequency}]
+  (:mdata (apply max-by #(candidate-key % frequency) candidates)))
 
 (defn -pick_next [this]
-  (pick-next (:model @@this)
-             (:freshness @@this)
-             (first (:sessions @@this))
-             (:songs @@this)
-             (:artist-frequency @@this)))
+  (pick-next @@this))
 
 (defn -deref [this]
   (.state this))
@@ -286,7 +215,6 @@
     (print "got: ")
     (pprint actual)
     (throw (new AssertionError "Test failed"))))
-
 
 (defn test-mini-model []
   (assert (= (mini-model {a false
@@ -317,35 +245,6 @@
                   {"artist" "b", "album" "b", "title" "b"}}
                 {:num 0, :den 1}}
                {#{"d" "b"} {:num 0, :den 1}}))))
-
-(defn test-get-sim-score []
-  (for [[input expected]
-        [[[0.3 false] 0.3]
-         [[-0.3 true] 0]
-         [[0.3 true] -0.3]]]
-    (assert (= (apply get-sim-score input) expected))))
-
-(defn test-get-content-mean []
-  (test=
-    (get-content-mean a
-                      {#{"a" "b"} {:score 0.777 :n 1}
-                       #{"a" "c"} {:score 0.111 :n 1}}
-                      {b false
-                       c true})
-    0.5553333333333333))
-
-(defn test-mk-candidate []
-  (test= (mk-candidate
-           a
-           {#{a b} {:score 0.777 :n 1}
-            #{a c} {:score 0.111 :n 1}
-            #{"a" "b"} {:score 0.5 :n 1}
-            #{"a" "c"} {:score 0.8 :n 1}}
-           {a (- (now) (* 60 60 24))}
-           {b false
-            c true})
-    {:mdata {"artist" "a", "album" "a", "title" "a"},
-     :score 0.7049092315033385}))
 
 (defn test-model []
   (let [rec (new reco.reco [a b c d e f g h])]
@@ -387,51 +286,63 @@
                       title (range n)]
                   {"artist" artist "album" artist "title" title})
         rec (new reco.reco library)]
+    (.update_model rec)
     (doseq [action skip-sequence]
       (.add_event rec (.pick_next rec) action (now)))
     (test=
       ((.pick_next rec) "artist")
       next-artist)))
 
+(defn demo-pick-next [artist-frequency skip-sequence]
+  (let [library (for [[artist n] artist-frequency
+                      title (range n)]
+                  {"artist" artist "album" artist "title" title})
+        rec (new reco.reco library)]
+    (.update_model rec)
+    (doseq [action skip-sequence]
+      (let [n (.pick_next rec)]
+        (.add_event rec n action (now))))
+    (pprint (:candidates @@rec))))
+
 (defn wait []
   (print "Press Enter to continue")
   (flush)
   (read-line))
 
-(defn demo-real-data []
-  (println "adding library")
-  (let [db {:classname   "org.sqlite.JDBC"
-            :subprotocol "sqlite"
-            :subname     "moody.db"}
-        library (map #(->> %
-                           (filter (fn [[k v]] (not= k :_id)))
-                           (map (fn [[k v]] [(name k) v]))
-                           (into {}))
-                     (jd/query db "select * from songs"))
-        rec (new reco.reco library)
-        parser (new java.text.SimpleDateFormat "yyyy-MM-dd HH:mm:ss")]
-    (println "adding events")
-    (doseq [{timestamp :time title :title artist :artist album :album
-             skipped :skipped}
-            (jd/query db "select time, title, artist, album, skipped from songs s
-                         join events e on s._id = e.song_id order by time asc")]
-      (let [seconds (.getTime (.parse parser timestamp))]
-        (.add_event rec artist album title
-                    (if (= skipped 1) true false) seconds)))
-    (println "updating model")
-    (.update_model rec)
-    (println "making recommendations")
-    ;(wait)
-    (loop [next-song (.pick_next rec)
-           actions (repeat 100 true)]
-      (println "next one")
-      (when (not (empty? actions))
-        ;(pprint next-song)
-        ;(println (if (first actions) "skip" "listen"))
-        ;(println)
-        (.add_event rec next-song (first actions) (now))
-        (recur (.pick_next rec)
-               (rest actions))))))
+;(defn demo-real-data []
+;  (println "adding library")
+;  (let [db {:classname   "org.sqlite.JDBC"
+;            :subprotocol "sqlite"
+;            :subname     "moody.db"}
+;        library (map #(->> %
+;                           (filter (fn [[k v]] (not= k :_id)))
+;                           (map (fn [[k v]] [(name k) v]))
+;                           (into {}))
+;                     (jd/query db "select * from songs"))
+;        rec (new reco.reco library)
+;        parser (new java.text.SimpleDateFormat "yyyy-MM-dd HH:mm:ss")]
+;    (println "adding events")
+;    (doseq [{timestamp :time title :title artist :artist album :album
+;             skipped :skipped}
+;            (jd/query db "select time, title, artist, album, skipped from songs s
+;                         join events e on s._id = e.song_id order by time asc")]
+;      (let [seconds (.getTime (.parse parser timestamp))]
+;        (.add_event rec artist album title
+;                    (if (= skipped 1) true false) seconds)))
+;    (println "updating model")
+;    (.update_model rec)
+;    (println "making recommendations")
+;    ;(wait)
+;    (loop [next-song (.pick_next rec)
+;           ;actions [true true false true false false true true]]
+;           actions (repeat 500 true)]
+;      (when (not (empty? actions))
+;        ;(pprint next-song)
+;        ;(println (if (first actions) "skip" "listen"))
+;        ;(println)
+;        (.add_event rec next-song (first actions) (now))
+;        (recur (.pick_next rec)
+;               (rest actions))))))
 
 (defn -main [& args]
   (println "starting up")
@@ -444,5 +355,7 @@
   ;(test-pick-next [["a" 2] ["b" 1]] [true] "b")
   ;(test-pick-next [["a" 3] ["b" 1]] [false false] "b")
 
-  (demo-real-data)
+  ;(demo-pick-next [["a" 2] ["b" 1]] [true])
+  ;(demo-pick-next [["a" 2] ["b" 1]] [false])
+  ;(demo-real-data)
   (println "all tests pass"))
