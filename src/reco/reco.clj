@@ -6,7 +6,6 @@
              [add_event [String, String, String, boolean] void]
              [add_event [java.util.Map, boolean, long] void]
              [pick_next [] java.util.Map]
-             [new_session [] void]
              [update_model [] void]]
    :init init
    :constructors {[java.util.Collection] []}))
@@ -29,35 +28,24 @@
 (def g {"artist" "g" "album" "g" "title" "g"})
 (def h {"artist" "h" "album" "h" "title" "h"})
 
+; TODO make sure this is used correctly
+(defrecord Candidate [timestamp freshness
+                      ratio n score
+                      content-ratio content-n content-score])
+
 (defn now []
   (quot (System/currentTimeMillis) 1000))
 
-(defn get-frequency [songs]
-  (loop [freq {}
-         songs-left songs]
-    (if (empty? songs-left)
-      (assoc freq "<unknown>" 1 nil 1)
-      (let [artist ((first songs-left) "artist")]
-        (recur (update freq artist #(if (nil? %) 1 (inc %)))
-               (rest songs-left))))))
-
-(defn -init [songs]
+(defn -init [raw-songs]
   ; into turns the java hashmap into a normal hashmap or something. Otherwise,
   ; the get-in call in mk-candidate always returns 0.
-  (let [converted-songs (map #(into {} %) songs)]
-    [[] (atom {:songs (vec converted-songs)
-               :artist-frequency (get-frequency converted-songs)
+  (let [songs (map #(into {} %) raw-songs)
+        candidates (repeat (count songs) (Candidate. 0 1 0 0 0 1 1 1))]
+    [[] (atom {:candidates (zipmap songs candidates)
                :sessions '()
                :last-time 0
                :model nil
-               :freshness {}
-               :candidates nil})]))
-
-(defn -new_session [this]
-  (swap! (.state this)
-         (fn [state]
-           (assoc state
-                  :sessions (cons nil (:sessions state))))))
+               :freshness {}})]))
 
 (defn ses-append [sessions mdata skipped create-session]
   (if create-session
@@ -83,6 +71,7 @@
   (apply merge-with #(merge-with + %1 %2) models))
 
 (defn convert-cell [[k v]]
+  ; take out max?
   [k {:score (- (* 2 (/ (:num v) (max 1 (:den v))))
                 1)
       :n (:den v)}])
@@ -109,57 +98,58 @@
         new-score (* (+ new-ratio margin) (:freshness candidate))]
     (assoc candidate score-key new-score ratio-key new-ratio n-key new-n)))
 
-;(defn calc-confidence [n]
-;  (- 1 (/ 1 (Math/pow 1.5 n))))
-;(def calc-confidence (memoize calc-confidence))
-
-;(defn calc-final-score [score n content-score freshness]
-;  (let [confidence (calc-confidence n)
-;        hybrid-mean (+ (* confidence score)
-;                       (* (- 1 confidence) content-score))
-;        margin (calc-margin n)
-;        final-score (* (+ hybrid-mean margin) freshness)]
-;    final-score))
-
-;(defn update-final-score [data]
-;  (let [{score :score n :n content-score :content-score freshness :freshness} data]
-;    (assoc data :final-score (calc-final-score score n content-score freshness))))
-
 (defn sim-score [model a b skipped]
   (let [sim (if (= a b) 1 (get-in model [(set [a b]) :score]))]
     (if (or (nil? sim) (and skipped (< sim 0)))
       nil
       (* sim (if skipped -1 1)))))
 
-(defn update-candidates
-  [{candidates :candidates model :model
-    artist-frequency :artist-frequency}
-   mdata skipped]
-  (map (fn [data]
-         (let [sim (sim-score model mdata (:mdata data) skipped)
-               content-sim (sim-score model (mdata "artist")
-                                      (get-in data [:mdata "artist"])
-                                      skipped)]
-           (cond-> data
-             sim (update-score :collaborative sim)
-             content-sim (update-score :content content-sim))))
-       (remove #(= (:mdata %) mdata) candidates)))
+(defn update-cand [[candidate data] model mdata skipped]
+  [candidate
+   (let [sim (sim-score model mdata (:mdata data) skipped)
+         content-sim (sim-score model (mdata "artist")
+                                (get-in data [:mdata "artist"]) skipped)]
+     (cond-> data
+       sim (update-score :collaborative sim)
+       content-sim (update-score :content content-sim)))])
+
+(defn update-candidates [state mdata skipped]
+  (let [{candidates :candidates model :model} state]
+    (assoc state :candidates
+           (into {} (map #(update-cand % model mdata skipped) candidates)))))
+
+;TODO
+;(defn reset-candidates [songs freshness]
+;  (map (fn [song]
+;         (let [freshness (- 1 (Math/exp (/ (- (get freshness song 0)
+;                                              (now)) 86400)))]
+;           {:mdata song
+;            :freshness freshness
+;            :ratio 0
+;            :n 0
+;            :score 0
+;            :content-ratio 1
+;            :content-n 1
+;            :content-score 1}))
+;       songs))
+
 
 (defn -add_event
   ([this, mdata, skipped, timestamp]
    (swap! (.state this)
           (fn [state]
-            (let [new-session (> timestamp (+ (:last-time state) ses-threshold))]
+            (let [new-session (> timestamp (+ (:last-time state) ses-threshold))
+                  sessions (ses-append (:sessions state) mdata skipped new-session)
+                  model (when (and new-session (:model state))
+                          (mk-model (:sessions state)))
+                  candidates (when model (reset-candidates (:candidates state)))]
               (cond-> state
-                  true (assoc :last-time timestamp)
-                  true (update :sessions ses-append mdata skipped new-session)
-
-                  (and new-session (:model state))
-                  (assoc :model (mk-model (:sessions state)))
-
-                  (not skipped) (assoc-in [:freshness mdata] timestamp)
-                  (:model state) (assoc :candidates (update-candidates
-                                                      state mdata skipped)))))))
+                true (assoc :last-time timestamp)
+                true (assoc :sessions sessions)
+                (not skipped) (assoc-in [:candidates mdata :timestamp] timestamp)
+                model (assoc :model model)
+                candidates (assoc :candidates candidates)
+                (:model state) (update-candidates mdata skipped))))))
   ([this, artist, album, title, skipped, timestamp]
    (.add_event this {"artist" artist "album" album "title" title}
                skipped timestamp))
@@ -172,26 +162,13 @@
     (pprint arg))
   arg)
 
-(defn init-candidates [songs freshness]
-  (map (fn [song]
-         (let [freshness (- 1 (Math/exp (/ (- (get freshness song 0)
-                                              (now)) 86400)))]
-           {:mdata song
-            :freshness freshness
-            :ratio 0
-            :n 0
-            :score 0
-            :content-ratio 1
-            :content-n 1
-            :content-score 1}))
-       songs))
-
 (defn -update_model [this]
   (swap! (.state this)
          (fn [state]
            (assoc state :model (mk-model (:sessions state))
-                  :candidates (doall (init-candidates (:songs state)
-                                                      (:freshness state)))))))
+                  :candidates (reset-candidates (:candidates state))))))
+                  ;(doall (init-candidates (:songs state)
+                  ;                                    (:freshness state)))))))
 
 ;(defn candidate-key [candidate frequency]
 ;  [(:final-score candidate)
@@ -203,8 +180,8 @@
 ;  ([k x y & more]
 ;   (reduce #(max-by k %1 %2) (max-by k x y) more)))
 
+; TODO
 (defn pick-next
-  ;[{candidates :candidates frequency :artist-frequency}]
   [{candidates :candidates}]
   (let [shuffled (shuffle candidates)
         choices (map #(apply max-key % shuffled)
