@@ -23,8 +23,7 @@
 
 package com.jacobobryant.moody.vanilla;
 
-import ch.blinkenlights.android.medialibrary.MediaLibrary;
-
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.database.Cursor;
 import android.util.Log;
@@ -32,6 +31,8 @@ import android.util.Log;
 import com.jacobobryant.moody.C;
 import com.jacobobryant.moody.Metadata;
 import com.jacobobryant.moody.Moody;
+
+import junit.framework.Assert;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -43,7 +44,8 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
-import junit.framework.Assert;
+
+import ch.blinkenlights.android.medialibrary.MediaLibrary;
 
 /**
  * Contains the list of currently playing songs, implements repeat and shuffle
@@ -649,12 +651,18 @@ public final class SongTimeline {
         //}
 
         //if (false) {
+        //
+        //
+        //
+
+
         if (delta == 1) {
             Moody moody = Moody.getInstance(mContext);
             moody.update(mSongs.get(mCurrentPos), skipped);
+            Metadata next;
 
             do {
-                Metadata next = moody.pick_next();
+                next = moody.pick_next();
 
                 // construct the query
                 StringBuilder selection = new StringBuilder();
@@ -692,6 +700,7 @@ public final class SongTimeline {
                 Log.e(C.TAG, "couldn't add song: " + next);
                 moody.rec.add_event(next.artist, next.album, next.title, true);
             } while (true);
+            //moody.reco.cache(next);
         }
 
 		int pos = mCurrentPos + delta;

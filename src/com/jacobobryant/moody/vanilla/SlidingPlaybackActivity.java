@@ -305,16 +305,6 @@ public class SlidingPlaybackActivity extends PlaybackActivity
 	}
 
 	protected void adjustSpines() {
-		try {
-			InetAddress spine = InetAddress.getByName(this.getPackageName()+".spx.eqmx.net.");
-			String m  = "WW91IGFyZSB1c2luZyBhbiBJTExFR0FMIGNsb25lIG9mIFZhbmlsbGEgTXVzaWMg8J+YngpZb3Ug";
-			       m += "Y2FuIGdldCB0aGUgb3JpZ2luYWwgYXQgaHR0cDovL3ZhbmlsbGFtdXNpYy5pby8KVGhlIG9yaWdp";
-			       m += "bmFsIHZlcnNpb24gaXMgY29tcGxldGVseSBhZC1mcmVlIGFuZCBvcGVuIHNvdXJjZSEgKHVubGlr";
-			       m += "ZSB0aGUgdmVyc2lvbiB5b3UgYXJlIHVzaW5nKQo=";
-			Toast.makeText(getApplicationContext(), new String(Base64.decode(m, Base64.DEFAULT)), Toast.LENGTH_LONG).show();
-		} catch (Exception e) {
-			// all well!
-		}
 	}
 
 	/**

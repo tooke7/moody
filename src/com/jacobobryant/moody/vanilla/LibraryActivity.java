@@ -23,8 +23,6 @@
 
 package com.jacobobryant.moody.vanilla;
 
-import ch.blinkenlights.android.medialibrary.MediaLibrary;
-
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -40,7 +38,6 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.PaintDrawable;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -57,12 +54,12 @@ import android.widget.CheckBox;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
-import android.widget.TextView;
 import android.widget.SearchView;
-import android.util.Log;
+import android.widget.TextView;
 
-import com.jacobobryant.moody.C;
 import com.jacobobryant.moody.Moody;
+
+import junit.framework.Assert;
 
 import java.io.File;
 import java.util.HashMap;
@@ -70,7 +67,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import junit.framework.Assert;
+import ch.blinkenlights.android.medialibrary.MediaLibrary;
 
 /**
  * The library activity where songs to play can be selected from the library.
@@ -209,7 +206,7 @@ public class LibraryActivity
 		if(PermissionRequestActivity.havePermissions(this) == false) {
 			PermissionRequestActivity.showWarning(this, getIntent());
 		} else {
-			Moody.getInstance(this).init();
+			Moody.getInstance(this);
 		}
 
 		mVanillaTabLayout = (VanillaTabLayout)findViewById(R.id.sliding_tabs);
@@ -857,7 +854,7 @@ public class LibraryActivity
 	{
 		switch (item.getItemId()) {
         case MENU_MOOD:
-            Moody.getInstance(this).rec.new_session();
+            //Moody.getInstance(this).rec.new_session();
             //final String[] moods = new String[] { "mood 1", "mood 2", "mood 3",
             //                                      "mood 4", "mood 5"};
             //int mood = Moody.getInstance(this).get_mood();
@@ -879,14 +876,6 @@ public class LibraryActivity
 			//AlertDialog d = b.create();
 			//d.show();
 
-            return true;
-        case MENU_TEST:
-			AsyncTask.execute(new Runnable() {
-				@Override
-				public void run() {
-					Moody.getInstance(LibraryActivity.this).test();
-				}
-			});
             return true;
 		case MENU_SEARCH:
 			mBottomBarControls.showSearch(true);
