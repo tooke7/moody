@@ -13,11 +13,12 @@
 (use '[clojure.set :only [intersection union difference]])
 (use '[clojure.math.combinatorics :only [combinations]])
 (use '[clojure.pprint :only [pprint]])
-(use '[clojure.java.jdbc :as jd])
+;(use '[clojure.java.jdbc :as jd])
 
-(def debug true)
+(def debug false)
 
 (def ses-threshold (* 30 60))
+
 (def k 5)
 (def a {"artist" "a" "album" "a" "title" "a"})
 (def b {"artist" "b" "album" "b" "title" "b"})
@@ -28,10 +29,15 @@
 (def g {"artist" "g" "album" "g" "title" "g"})
 (def h {"artist" "h" "album" "h" "title" "h"})
 
-; TODO make sure this is used correctly
 (defrecord Candidate [timestamp freshness
                       ratio n score
                       content-ratio content-n content-score])
+
+(defn dbg [desc arg]
+  (when debug
+    (print (str desc ": "))
+    (pprint arg))
+  arg)
 
 (defn now []
   (quot (System/currentTimeMillis) 1000))
@@ -44,8 +50,7 @@
     [[] (atom {:candidates (zipmap songs candidates)
                :sessions '()
                :last-time 0
-               :model nil
-               :freshness {}})]))
+               :model nil})]))
 
 (defn ses-append [sessions mdata skipped create-session]
   (if create-session
@@ -86,8 +91,7 @@
 
 (defn update-score [candidate score-type sim]
   (let [[n-key ratio-key score-key]
-        (map #(dbg "symbol" symbol (str ":" (when (= score-type :content)
-                                              "content-") %))
+        (map #(keyword (str (when (= score-type :content) "content-") %))
              ["n", "ratio", "score"])
         
         old-n (n-key candidate)
@@ -106,49 +110,60 @@
 
 (defn update-cand [[candidate data] model mdata skipped]
   [candidate
-   (let [sim (sim-score model mdata (:mdata data) skipped)
+   (let [sim (sim-score model mdata candidate skipped)
          content-sim (sim-score model (mdata "artist")
-                                (get-in data [:mdata "artist"]) skipped)]
+                                (candidate "artist") skipped)]
      (cond-> data
        sim (update-score :collaborative sim)
        content-sim (update-score :content content-sim)))])
 
-(defn update-candidates [state mdata skipped]
-  (let [{candidates :candidates model :model} state]
-    (assoc state :candidates
-           (into {} (map #(update-cand % model mdata skipped) candidates)))))
+(defn update-candidates
+  ([state mdata skipped]
+   (let [{candidates :candidates model :model} state]
+     (assoc state :candidates
+            (update-candidates candidates model mdata skipped))))
+  ([candidates model mdata skipped]
+   (into {} (map #(update-cand % model mdata skipped) candidates))))
 
-;TODO
-;(defn reset-candidates [songs freshness]
-;  (map (fn [song]
-;         (let [freshness (- 1 (Math/exp (/ (- (get freshness song 0)
-;                                              (now)) 86400)))]
-;           {:mdata song
-;            :freshness freshness
-;            :ratio 0
-;            :n 0
-;            :score 0
-;            :content-ratio 1
-;            :content-n 1
-;            :content-score 1}))
-;       songs))
+(defn calc-freshness [timestamp]
+  (- 1 (Math/exp (/ (- timestamp (now)) 86400))))
 
+(defn reset-candidates [candidates]
+  (into {} (map (fn [[song data]]
+                  [song
+                   (assoc data
+                          :freshness (calc-freshness (:timestamp data))
+                          :ratio 0
+                          :n 0
+                          :score 0
+                          :content-ratio 1
+                          :content-n 1
+                          :content-score 1)])
+                candidates)))
 
 (defn -add_event
   ([this, mdata, skipped, timestamp]
    (swap! (.state this)
           (fn [state]
-            (let [new-session (> timestamp (+ (:last-time state) ses-threshold))
+            (let [time-delta (- timestamp (:last-time state))
+                  new-session (> time-delta ses-threshold)
                   sessions (ses-append (:sessions state) mdata skipped new-session)
-                  model (when (and new-session (:model state))
-                          (mk-model (:sessions state)))
-                  candidates (when model (reset-candidates (:candidates state)))]
+                  new-model (when (and new-session (:model state))
+                          (mk-model (:sessions state)))]
+
+              (when (= new-session (= (count sessions)
+                                      (count (:sessions state))))
+                (println "WARNING: didn't create new session"))
+              (when (> timestamp (:last-time state))
+                (printf "WARNING: timestamp=%d but last-time=%d\n"
+                        timestamp (:last-time state)))
+
               (cond-> state
-                true (assoc :last-time timestamp)
-                true (assoc :sessions sessions)
-                (not skipped) (assoc-in [:candidates mdata :timestamp] timestamp)
-                model (assoc :model model)
-                candidates (assoc :candidates candidates)
+                true (assoc :last-time timestamp
+                            :sessions sessions)
+                true (assoc-in [:candidates mdata :timestamp] timestamp)
+                new-model (assoc :model new-model :candidates
+                                 (reset-candidates (:candidates state)))
                 (:model state) (update-candidates mdata skipped))))))
   ([this, artist, album, title, skipped, timestamp]
    (.add_event this {"artist" artist "album" album "title" title}
@@ -156,38 +171,49 @@
   ([this, artist, album, title, skipped]
    (.add_event this artist album title skipped (now))))
 
-(defn dbg [desc arg]
-  (when debug
-    (print (str desc ": "))
-    (pprint arg))
-  arg)
-
 (defn -update_model [this]
   (swap! (.state this)
          (fn [state]
-           (assoc state :model (mk-model (:sessions state))
-                  :candidates (reset-candidates (:candidates state))))))
-                  ;(doall (init-candidates (:songs state)
-                  ;                                    (:freshness state)))))))
+           (let [[old-sessions cur-session]
+                 (if (> ses-threshold (- (now) (:last-time state)))
+                   [(rest (:sessions state)) (first (:sessions state))]
+                   [(:sessions state) nil])
 
-;(defn candidate-key [candidate frequency]
-;  [(:final-score candidate)
-;   (frequency (get-in candidate [:mdata "artist"]))])
-;
-;(defn max-by
-;  ([k x] x)
-;  ([k x y] (if (> (compare (k x) (k y)) 0) x y))
-;  ([k x y & more]
-;   (reduce #(max-by k %1 %2) (max-by k x y) more)))
+                 new-model (mk-model old-sessions)
+                 new-candidates
+                 (loop [cands (reset-candidates (:candidates state))
+                        session cur-session]
+                   (if (empty? session)
+                     cands
+                     (let [[mdata skipped] (first session)]
+                       (recur (update-candidates cands new-model mdata skipped)
+                              (rest session)))))]
+             (assoc state :model new-model :candidates new-candidates)))))
 
-; TODO
-(defn pick-next
-  [{candidates :candidates}]
-  (let [shuffled (shuffle candidates)
-        choices (map #(apply max-key % shuffled)
-                     [:score :content-score])]
+(defn calc-confidence [n]
+  (- 1 (/ 1 (Math/pow 1.5 n))))
+(def calc-confidence (memoize calc-confidence))
+
+(defn assign [candidate]
+  ;(if (< (rand) (calc-confidence (:n candidate)))
+  (if (< 0 (:n candidate))
+    :main
+    :content))
+
+(defn pick-next [{candidates :candidates sessions :sessions}]
+  (let [cur-session (set (keys (first sessions)))
+        cand-list (as-> candidates x 
+                    (apply dissoc x cur-session)
+                    (map (fn [[k v]] (assoc v :mdata k)) x)
+                    (shuffle x))
+        {main-choices :main content-choices :content} (group-by assign cand-list)
+        choices (map #(if (empty? %2) nil (apply max-key %1 %2))
+                     [:score :content-score] [main-choices content-choices])]
+    (dbg "main-choices length" (count main-choices))
+    (dbg "content-choices length" (count content-choices))
     (println "choices:" choices)
-    (:mdata (rand-nth (remove nil? choices)))))
+    (:mdata ((if (< (rand) 0.8) first last)
+             (remove nil? choices)))))
 
 (defn -pick_next [this]
   (pick-next @@this))
@@ -296,40 +322,47 @@
   (flush)
   (read-line))
 
-(defn demo-real-data []
-  (println "adding library")
-  (let [db {:classname   "org.sqlite.JDBC"
-            :subprotocol "sqlite"
-            :subname     "moody.db"}
-        library (map #(->> %
-                           (filter (fn [[k v]] (not= k :_id)))
-                           (map (fn [[k v]] [(name k) v]))
-                           (into {}))
-                     (jd/query db "select * from songs"))
-        rec (new reco.reco library)
-        parser (new java.text.SimpleDateFormat "yyyy-MM-dd HH:mm:ss")]
-    (println "adding events")
-    (doseq [{timestamp :time title :title artist :artist album :album
-             skipped :skipped}
-            (jd/query db "select time, title, artist, album, skipped from songs s
-                         join events e on s._id = e.song_id order by time asc")]
-      (let [seconds (.getTime (.parse parser timestamp))]
-        (.add_event rec artist album title
-                    (if (= skipped 1) true false) seconds)))
-    (println "updating model")
-    (.update_model rec)
-    (println "making recommendations")
-    ;(wait)
-    (loop [next-song (.pick_next rec)
-           actions [true true false true false false true true]]
-           ;actions (repeat 500 true)]
-      (when (not (empty? actions))
-        (pprint next-song)
-        (println (if (first actions) "skip" "listen"))
-        (println)
-        (.add_event rec next-song (first actions) (now))
-        (recur (.pick_next rec)
-               (rest actions))))))
+;(defn demo-real-data []
+;  (println "adding library")
+;  (let [db {:classname   "org.sqlite.JDBC"
+;            :subprotocol "sqlite"
+;            :subname     "moody.db"}
+;        library (map #(->> %
+;                           (filter (fn [[k v]] (not= k :_id)))
+;                           (map (fn [[k v]] [(name k) v]))
+;                           (into {}))
+;                     (jd/query db "select * from songs"))
+;        rec (new reco.reco library)
+;        parser (new java.text.SimpleDateFormat "yyyy-MM-dd HH:mm:ss")]
+;
+;    (println "adding events")
+;    (doseq [{timestamp :time title :title artist :artist album :album
+;             skipped :skipped}
+;            (jd/query db "select time, title, artist, album, skipped from songs s
+;                         join events e on s._id = e.song_id order by time asc")]
+;      (let [seconds (quot (.getTime (.parse parser timestamp)) 1000)]
+;        (.add_event rec artist album title
+;                    (if (= skipped 1) true false) seconds)))
+;
+;
+;    (dbg "sessions length" (count (:sessions @@rec)))
+;
+;    (println "updating model")
+;    (.update_model rec)
+;    (dbg "model length" (count (:model @@rec)))
+;
+;    (println "making recommendations")
+;    ;(wait)
+;    (loop [next-song (.pick_next rec)
+;           actions [true true false true false false true true]]
+;           ;actions (repeat 500 true)]
+;      (when (not (empty? actions))
+;        (pprint next-song)
+;        (println (if (first actions) "skip" "listen"))
+;        (println)
+;        (.add_event rec next-song (first actions) (now))
+;        (recur (.pick_next rec)
+;               (rest actions))))))
 
 (defn -main [& args]
   (println "starting up")
@@ -344,5 +377,5 @@
 
   ;(demo-pick-next [["a" 2] ["b" 1]] [true])
   ;(demo-pick-next [["a" 2] ["b" 1]] [false])
-  (demo-real-data)
+  ;(demo-real-data)
   (println "all tests pass"))
