@@ -212,7 +212,7 @@
     (dbg "main-choices length" (count main-choices))
     (dbg "content-choices length" (count content-choices))
     (println "choices:" choices)
-    (:mdata ((if (< (rand) 0.8) first last)
+    (:mdata ((if (< (rand) 0.6) first last)
              (remove nil? choices)))))
 
 (defn -pick_next [this]
