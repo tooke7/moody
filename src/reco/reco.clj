@@ -29,7 +29,7 @@
 (def g {"artist" "g" "album" "g" "title" "g"})
 (def h {"artist" "h" "album" "h" "title" "h"})
 
-(defrecord Candidate [timestamp freshness
+(defrecord Candidate [timestamps freshness
                       ratio n score
                       content-ratio content-n content-score])
 
@@ -46,7 +46,7 @@
   ; into turns the java hashmap into a normal hashmap or something. Otherwise,
   ; the get-in call in mk-candidate always returns 0.
   (let [songs (map #(into {} %) raw-songs)
-        candidates (repeat (count songs) (Candidate. 0 1 0 0 0 1 1 1))]
+        candidates (repeat (count songs) (Candidate. '() 1 0 0 0 1 1 1))]
     [[] (atom {:candidates (zipmap songs candidates)
                :sessions '()
                :last-time 0
@@ -125,14 +125,19 @@
   ([candidates model mdata skipped]
    (into {} (map #(update-cand % model mdata skipped) candidates))))
 
-(defn calc-freshness [timestamp]
-  (- 1 (Math/exp (/ (- timestamp (now)) 86400))))
+(def memory-strength 3)
+(defn freshness-penalty [timestamp]
+  (let [delta-days (/ (- (now) timestamp) 86400)]
+    (- 1 (/ 1 (Math/exp (/ delta-days memory-strength))))))
+
+(defn calc-freshness [timestamps]
+  (reduce * (map freshness-penalty timestamps)))
 
 (defn reset-candidates [candidates]
   (into {} (map (fn [[song data]]
                   [song
                    (assoc data
-                          :freshness (calc-freshness (:timestamp data))
+                          :freshness (calc-freshness (:timestamps data))
                           :ratio 0
                           :n 0
                           :score 0
@@ -154,14 +159,14 @@
               (when (= new-session (= (count sessions)
                                       (count (:sessions state))))
                 (println "WARNING: didn't create new session"))
-              (when (> timestamp (:last-time state))
+              (when (< timestamp (:last-time state))
                 (printf "WARNING: timestamp=%d but last-time=%d\n"
                         timestamp (:last-time state)))
 
               (cond-> state
                 true (assoc :last-time timestamp
                             :sessions sessions)
-                true (assoc-in [:candidates mdata :timestamp] timestamp)
+                true (update-in [:candidates mdata :timestamps] #(conj % timestamp))
                 new-model (assoc :model new-model :candidates
                                  (reset-candidates (:candidates state)))
                 (:model state) (update-candidates mdata skipped))))))
