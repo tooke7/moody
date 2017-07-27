@@ -853,6 +853,9 @@ public class LibraryActivity
 	public boolean onOptionsItemSelected(MenuItem item)
 	{
 		switch (item.getItemId()) {
+        case MENU_TEST:
+            Intent intent = new Intent(this, SpotifyActivity.class);
+            startActivity(intent);
         case MENU_MOOD:
             //Moody.getInstance(this).rec.new_session();
             //final String[] moods = new String[] { "mood 1", "mood 2", "mood 3",

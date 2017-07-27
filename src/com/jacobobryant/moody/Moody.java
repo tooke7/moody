@@ -18,13 +18,14 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import reco.reco;
 
 public class Moody {
     private static Moody instance;
     private Context context;
-    //private List<Metadata> songs;
+    private List<Metadata> songs;
     private Metadata random_song;
     public static final String AUTHORITY = "com.jacobobryant.moody.vanilla";
     public static final String ACCOUNT_TYPE = "com.jacobobryant";
@@ -71,7 +72,7 @@ public class Moody {
         SQLiteDatabase db = new Database(context).getWritableDatabase();
         db.beginTransaction();
 
-        List<Metadata> songs = new ArrayList<>();
+        songs = new ArrayList<>();
         // get metadata for all the user's songs
         result.moveToPosition(-1);
         while (result.moveToNext()) {
@@ -95,7 +96,8 @@ public class Moody {
         // read in past skip data
         result = db.rawQuery("SELECT artist, album, title, skipped, time " +
                 "FROM songs JOIN events ON songs._id = events.song_id " +
-                "WHERE algorithm != 0", null);
+                //"WHERE algorithm != 0", null);
+                "ORDER BY time ASC", null);
         result.moveToPosition(-1);
         while (result.moveToNext()) {
             String artist = result.getString(0);
@@ -130,9 +132,9 @@ public class Moody {
             random_song = null;
         } else {
             algorithm = C.ALG_VERSION;
-            rec.add_event(last_song.artist, last_song.album,
-                    last_song.title, skipped);
         }
+        rec.add_event(last_song.artist, last_song.album,
+                last_song.title, skipped);
 
         // update db
         SQLiteDatabase db = new Database(context).getWritableDatabase();
@@ -163,17 +165,17 @@ public class Moody {
     }
 
     public Metadata pick_next() {
-        //float CONTROL_PROB = 0.1f;
+        float CONTROL_PROB = 0.2f;
 
         // suggest a random song every now and then for evaluation purposes.
-        //if (Math.random() < CONTROL_PROB) {
-        //    int item = new Random().nextInt(songs.size());
-        //    random_song = songs.get(item);
-        //    Log.d(C.TAG, "suggesting random song: " + random_song);
-        //    return random_song;
-        //} else {
-            return new Metadata(rec.pick_next());
-        //}
+        if (Math.random() < CONTROL_PROB) {
+            int item = new Random().nextInt(songs.size());
+            random_song = songs.get(item);
+            Log.d(C.TAG, "suggesting random song: " + random_song);
+            return random_song;
+        } else {
+          return new Metadata(rec.pick_next());
+        }
     }
 
     private List<Map<String, String>> conv(List<Metadata> songs) {

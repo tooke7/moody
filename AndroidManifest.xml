@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
+<?xml version="1.0" encoding="utf-8"?><!--
 Copyright (C) 2012-2015 Adrian Ulrich <adrian@blinkenlights.ch>
 Copyright (C) 2012 Christopher Eby <kreed@kreed.org>
 
@@ -22,26 +21,30 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-	package="com.jacobobryant.moody.vanilla"
-	android:versionName="1.4.2"
-	android:versionCode="10492"
-	android:installLocation="auto">
-	<uses-sdk android:minSdkVersion="15" android:targetSdkVersion="24" />
-	<uses-permission android:name="android.permission.WAKE_LOCK" />
-	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    package="com.jacobobryant.moody.vanilla"
+    android:installLocation="auto"
+    android:versionCode="10495"
+    android:versionName="1.5">
+
+    <uses-sdk
+        android:minSdkVersion="15"
+        android:targetSdkVersion="24" />
+
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
     <uses-permission android:name="android.permission.WRITE_SYNC_SETTINGS" />
     <uses-permission android:name="android.permission.AUTHENTICATE_ACCOUNTS" />
-	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-	<!-- This is needed for isWiredHeadsetOn() to work in some cases. (bug?) -->
-	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-	<application
-		android:resizeableActivity="true"
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- This is needed for isWiredHeadsetOn() to work in some cases. (bug?) -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <application
         android:icon="@mipmap/ic_launcher"
-		android:label="@string/app_name">
-
-
+        android:label="@string/app_name"
+        android:resizeableActivity="true">
         <service android:name="com.jacobobryant.moody.AuthenticatorService">
             <intent-filter>
                 <action android:name="android.accounts.AccountAuthenticator" />
@@ -69,150 +72,161 @@ THE SOFTWARE.
             android:exported="false"
             android:syncable="true" />
 
+        <meta-data
+            android:name="com.mirrorlink.android.rockscout.allow-offline-access"
+            android:value="true" />
 
-		<meta-data
-		android:name="com.mirrorlink.android.rockscout.allow-offline-access"
-		android:value="true" />
+        <activity
+            android:name=".FullPlaybackActivity"
+            android:launchMode="singleTask" />
+        <activity
+            android:name=".LibraryActivity"
+            android:launchMode="singleTask"
+            android:theme="@style/Library">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
 
-		<activity
-			android:name=".FullPlaybackActivity"
-			android:launchMode="singleTask" />
-		<activity
-			android:name=".LibraryActivity"
-			android:theme="@style/Library"
-			android:launchMode="singleTask">
-			<intent-filter>
-				<action android:name="android.intent.action.MAIN" />
-				<category android:name="android.intent.category.LAUNCHER" />
-				<category android:name="android.intent.category.APP_MUSIC" />
-				<category android:name="android.intent.category.DEFAULT" />
-			</intent-filter>
-		</activity>
-		<activity
-			android:name=".PlaylistActivity"
-			android:launchMode="singleTask" />
-		<activity
-			android:name=".MiniPlaybackActivity"
-			android:theme="@style/PopupDialog"
-			android:excludeFromRecents="true"
-			android:launchMode="singleInstance" />
-		<receiver
-			android:name=".OneCellWidget"
-			android:label="Smart Shuffle 1x1">
-			<intent-filter>
-				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-			</intent-filter>
-			<meta-data
-				android:name="android.appwidget.provider"
-				android:resource="@xml/one_cell_widget" />
-		</receiver>
-		<receiver
-			android:name=".FourLongWidget"
-			android:label="Smart Shuffle 4x1 A">
-			<intent-filter>
-				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-			</intent-filter>
-			<meta-data
-				android:name="android.appwidget.provider"
-				android:resource="@xml/four_long_widget" />
-		</receiver>
-		<receiver
-			android:name=".FourWhiteWidget"
-			android:label="Smart Shuffle 4x1 White">
-			<intent-filter>
-				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-			</intent-filter>
-			<meta-data
-				android:name="android.appwidget.provider"
-				android:resource="@xml/four_white_widget" />
-		</receiver>
-		<receiver
-			android:name=".WidgetE"
-			android:label="Smart Shuffle 4x1 B">
-			<intent-filter>
-				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-			</intent-filter>
-			<meta-data
-				android:name="android.appwidget.provider"
-				android:resource="@xml/widget_e" />
-		</receiver>
-		<receiver
-			android:name=".FourSquareWidget"
-			android:label="Smart Shuffle 2x2 A">
-			<intent-filter>
-				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-			</intent-filter>
-			<meta-data
-				android:name="android.appwidget.provider"
-				android:resource="@xml/four_square_widget" />
-		</receiver>
-		<receiver
-			android:name=".WidgetD"
-			android:label="Smart Shuffle 2x2 B">
-			<intent-filter>
-				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-			</intent-filter>
-			<meta-data
-				android:name="android.appwidget.provider"
-				android:resource="@xml/widget_d" />
-		</receiver>
-		<receiver android:name=".MediaButtonReceiver" >
-			<intent-filter android:priority="999">
-				<action android:name="android.intent.action.MEDIA_BUTTON" />
-			</intent-filter>
-		</receiver>
-		<service android:name=".PlaybackService">
-			<intent-filter>
-				<action android:name="com.jacobobryant.moody.vanilla.action.PLAY" />
-				<action android:name="com.jacobobryant.moody.vanilla.action.PAUSE" />
-				<action android:name="com.jacobobryant.moody.vanilla.action.TOGGLE_PLAYBACK" />
-				<action android:name="com.jacobobryant.moody.vanilla.action.NEXT_SONG" />
-				<action android:name="com.jacobobryant.moody.vanilla.action.PREVIOUS_SONG" />
-			</intent-filter>
-		</service>
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".PlaylistActivity"
+            android:launchMode="singleTask" />
+        <activity
+            android:name=".MiniPlaybackActivity"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:theme="@style/PopupDialog" />
 
-		<service
-			android:name=".MirrorLinkMediaBrowserService"
-			android:exported="true">
-			<intent-filter>
-				<action android:name="android.media.browse.MediaBrowserService" />
-			</intent-filter>
-		</service>
+        <receiver
+            android:name=".OneCellWidget"
+            android:label="Smart Shuffle 1x1">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
 
-		<activity
-			android:name=".PreferencesActivity" />
-		<activity
-			android:name=".TabOrderActivity" />
-		<activity
-			android:name=".FilebrowserStartActivity" />
-		<activity
-			android:name=".PermissionRequestActivity"
-			android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/one_cell_widget" />
+        </receiver>
+        <receiver
+            android:name=".FourLongWidget"
+            android:label="Smart Shuffle 4x1 A">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
 
-		<activity android:name=".AudioPickerActivity" android:theme="@style/PopupDialog"
-			android:excludeFromRecents="true" android:exported="true" >
-			<intent-filter>
-				<action android:name="android.intent.action.VIEW" />
-				<category android:name="android.intent.category.DEFAULT" />
-				<data android:scheme="file"/>
-				<data android:mimeType="audio/*"/>
-				<data android:mimeType="application/ogg"/>
-				<data android:mimeType="application/x-ogg"/>
-				<data android:mimeType="application/x-flac"/>
-				<data android:mimeType="application/itunes"/>
-			</intent-filter>
-			<intent-filter>
-				<action android:name="android.intent.action.VIEW" />
-				<category android:name="android.intent.category.DEFAULT" />
-				<data android:scheme="content"/>
-				<data android:host="media"/>
-				<data android:mimeType="audio/*"/>
-				<data android:mimeType="application/ogg"/>
-				<data android:mimeType="application/x-ogg"/>
-				<data android:mimeType="application/x-flac"/>
-				<data android:mimeType="application/itunes"/>
-			</intent-filter>
-		</activity>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/four_long_widget" />
+        </receiver>
+        <receiver
+            android:name=".FourWhiteWidget"
+            android:label="Smart Shuffle 4x1 White">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
 
-	</application>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/four_white_widget" />
+        </receiver>
+        <receiver
+            android:name=".WidgetE"
+            android:label="Smart Shuffle 4x1 B">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_e" />
+        </receiver>
+        <receiver
+            android:name=".FourSquareWidget"
+            android:label="Smart Shuffle 2x2 A">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/four_square_widget" />
+        </receiver>
+        <receiver
+            android:name=".WidgetD"
+            android:label="Smart Shuffle 2x2 B">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_d" />
+        </receiver>
+        <receiver android:name=".MediaButtonReceiver">
+            <intent-filter android:priority="999">
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+
+        <service android:name=".PlaybackService">
+            <intent-filter>
+                <action android:name="com.jacobobryant.moody.vanilla.action.PLAY" />
+                <action android:name="com.jacobobryant.moody.vanilla.action.PAUSE" />
+                <action android:name="com.jacobobryant.moody.vanilla.action.TOGGLE_PLAYBACK" />
+                <action android:name="com.jacobobryant.moody.vanilla.action.NEXT_SONG" />
+                <action android:name="com.jacobobryant.moody.vanilla.action.PREVIOUS_SONG" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".MirrorLinkMediaBrowserService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+
+        <activity android:name=".PreferencesActivity" />
+        <activity android:name=".TabOrderActivity" />
+        <activity android:name=".FilebrowserStartActivity" />
+        <activity
+            android:name=".PermissionRequestActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity
+            android:name=".AudioPickerActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/PopupDialog">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:scheme="file" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/ogg" />
+                <data android:mimeType="application/x-ogg" />
+                <data android:mimeType="application/x-flac" />
+                <data android:mimeType="application/itunes" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:scheme="content" />
+                <data android:host="media" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/ogg" />
+                <data android:mimeType="application/x-ogg" />
+                <data android:mimeType="application/x-flac" />
+                <data android:mimeType="application/itunes" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".SpotifyActivity"></activity>
+    </application>
+
 </manifest>

@@ -10,6 +10,9 @@ buildscript {
 allprojects {
     repositories {
         jcenter()
+        flatDir {
+            dirs 'libs'
+        }
     }
 }
 apply plugin: 'com.android.application'
@@ -49,6 +52,10 @@ android {
 }
 
 dependencies {
-    compile 'commons-io:commons-io:2.4'
+    compile fileTree(dir: 'libs', include: ['*.jar'])
     compile files('libs/reco-0.1.0-SNAPSHOT-standalone.jar')
+
+    compile 'commons-io:commons-io:2.4'
+    compile 'com.spotify.sdk:spotify-player:24-noconnect-2.20b@aar'
+    compile 'com.spotify.sdk:spotify-auth:1.0.0-beta13@aar'
 }
