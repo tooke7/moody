@@ -44,6 +44,7 @@ import android.os.Message;
 import android.support.iosched.tabs.VanillaTabLayout;
 import android.support.v4.view.ViewPager;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.ContextMenu;
 import android.view.KeyEvent;
 import android.view.Menu;
@@ -57,7 +58,11 @@ import android.widget.ListView;
 import android.widget.SearchView;
 import android.widget.TextView;
 
+import com.jacobobryant.moody.C;
 import com.jacobobryant.moody.Moody;
+import com.spotify.sdk.android.authentication.AuthenticationClient;
+import com.spotify.sdk.android.authentication.AuthenticationRequest;
+import com.spotify.sdk.android.authentication.AuthenticationResponse;
 
 import junit.framework.Assert;
 
@@ -221,7 +226,33 @@ public class LibraryActivity
 		loadAlbumIntent(getIntent());
 		bindControlButtons();
 
+        // spotify stuff
+        AuthenticationRequest.Builder builder =
+                new AuthenticationRequest.Builder(C.CLIENT_ID,
+                AuthenticationResponse.Type.TOKEN, C.REDIRECT_URI);
+        builder.setScopes(new String[]{"user-read-private", "streaming",
+                "user-top-read"});
+        AuthenticationRequest request = builder.build();
+
+        AuthenticationClient.openLoginActivity(this, 666, request);
+
 	}
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
+        super.onActivityResult(requestCode, resultCode, intent);
+        // Check if result comes from the correct activity
+        if (requestCode == 666) {
+            AuthenticationResponse response = AuthenticationClient.getResponse(resultCode, intent);
+            if (response.getType() == AuthenticationResponse.Type.TOKEN) {
+                Log.d(C.TAG, "spotify access token: " + response.getAccessToken());
+                SharedPreferences settings = PlaybackService.getSettings(this);
+                settings.edit().putString(PrefKeys.SPOTIFY_TOKEN,
+                        response.getAccessToken()).commit();
+            }
+        }
+    }
+
 
 	/**
 	 * Shows plugin selection dialog. Be sure that {@link #mLastRequestedCtx} is initialized

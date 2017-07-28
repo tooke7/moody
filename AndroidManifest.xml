@@ -227,6 +227,12 @@ THE SOFTWARE.
             </intent-filter>
         </activity>
         <activity android:name=".SpotifyActivity"></activity>
+
+        <activity
+            android:name="com.spotify.sdk.android.authentication.LoginActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"/>
+
+
     </application>
 
 </manifest>

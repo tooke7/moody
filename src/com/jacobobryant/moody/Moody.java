@@ -4,6 +4,7 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
@@ -11,6 +12,8 @@ import android.provider.MediaStore;
 import android.util.Log;
 
 import com.jacobobryant.moody.vanilla.BuildConfig;
+import com.jacobobryant.moody.vanilla.PlaybackService;
+import com.jacobobryant.moody.vanilla.PrefKeys;
 import com.jacobobryant.moody.vanilla.Song;
 
 import java.text.ParseException;
@@ -32,6 +35,10 @@ public class Moody {
     public static final String ACCOUNT = "moodyaccount";
     private Account newAccount;
     public reco rec;
+
+    private String spotify_token;
+    private static final int REQUEST_CODE = 666;
+
 
     private Moody() { }
 
@@ -84,13 +91,34 @@ public class Moody {
             db.execSQL("INSERT INTO songs (artist, album, title) VALUES (?, ?, ?)",
                     new String[] {artist, album, title});
 
-            // initialize ratios
             songs.add(new Metadata(artist, album, title));
         }
 
         db.setTransactionSuccessful();
         db.endTransaction();
         result.close();
+
+        // get spotify songs
+        //db.beginTransaction();
+        SharedPreferences settings = PlaybackService.getSettings(context);
+        String token = settings.getString(PrefKeys.SPOTIFY_TOKEN, null);
+        try {
+            for (Map<String, String> song : (List<Map<String, String>>)reco.spotify_thang(token)) {
+                String uri = song.get("uri");
+                String artist = song.get("artist");
+
+                //db.execSQL("INSERT INTO songs (artist, title) " +
+                //        "VALUES (?, ?, ?)", new String[] {artist, uri});
+                //songs.add(new Metadata(artist, album, title));
+                Log.d(C.TAG, "adding spotify uri " + uri + " by " + artist);
+            }
+        } catch (Exception e) {
+            Log.e(C.TAG, "problem with spotify: ", e);
+        }
+        //db.setTransactionSuccessful();
+        //db.endTransaction();
+        Log.d(C.TAG, "finished spotify thang");
+
         rec = new reco(conv(songs));
 
         // read in past skip data
