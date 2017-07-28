@@ -6,14 +6,19 @@
              [add_event [String, String, String, boolean] void]
              [add_event [java.util.Map, boolean, long] void]
              [pick_next [] java.util.Map]
-             [update_model [] void]]
+             [update_model [] void]
+             ^:static [spotify_thang [String] java.util.List]]
    :init init
-   :constructors {[java.util.Collection] []}))
+   :constructors {[java.util.Collection] []})
+  ;(:require [clj-http.client :as client]
+  ;          [clojure.data.json :as json]))
+  )
 
 (use '[clojure.set :only [intersection union difference]])
 (use '[clojure.math.combinatorics :only [combinations]])
 (use '[clojure.pprint :only [pprint]])
 ;(use '[clojure.java.jdbc :as jd])
+
 
 (def debug false)
 
@@ -398,6 +403,17 @@
 ;        (recur (.pick_next rec)
 ;               (rest actions))))))
 
+(defn -spotify_thang [token]
+  ;(let [;token "BQBgnAlhZiGA4TXPdKeFAr9iRq5bQ5vEPq3NPirb4bV01hIXh_FWeXrN1Kf3_JJWrLNZ1kwgfrDvmQBKIKmI3qfXv1sBCqqA5E833aCotbEl148SirYSUV-xFKypG9z5fhCHn2JqMkj2Ov-VOPgkW0opRBZH7UKP21Quef0qkowP5Lc"
+  ;      response (client/get "https://api.spotify.com/v1/me/top/tracks?limit=50"
+  ;                           {:headers {:Authorization (str "Bearer " token)}})
+  ;      data (json/read-str (:body response))]
+  ;  (map (fn [item] {"uri" (get item "uri")
+  ;                           "artist" (get-in item ["artists" 0 "name"])})
+  ;               (data "items"))))
+  [])
+
+
 (defn -main [& args]
   (println "starting up")
   ;(test-mini-model)
@@ -412,4 +428,6 @@
   ;(demo-pick-next [["a" 2] ["b" 1]] [true])
   ;(demo-pick-next [["a" 2] ["b" 1]] [false])
   ;(demo-real-data)
+  ;(spotify-thang)
+  ;(reco.reco/spotify_thang "BQBgnAlhZiGA4TXPdKeFAr9iRq5bQ5vEPq3NPirb4bV01hIXh_FWeXrN1Kf3_JJWrLNZ1kwgfrDvmQBKIKmI3qfXv1sBCqqA5E833aCotbEl148SirYSUV-xFKypG9z5fhCHn2JqMkj2Ov-VOPgkW0opRBZH7UKP21Quef0qkowP5Lc")
   (println "all tests pass"))
