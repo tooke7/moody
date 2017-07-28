@@ -16,6 +16,12 @@ import com.jacobobryant.moody.vanilla.PlaybackService;
 import com.jacobobryant.moody.vanilla.PrefKeys;
 import com.jacobobryant.moody.vanilla.Song;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -103,7 +109,29 @@ public class Moody {
         SharedPreferences settings = PlaybackService.getSettings(context);
         String token = settings.getString(PrefKeys.SPOTIFY_TOKEN, null);
         try {
-            for (Map<String, String> song : (List<Map<String, String>>)reco.spotify_thang(token)) {
+            // query spotify
+            URL obj;
+            try {
+                obj = new URL("https://api.spotify.com/v1/me/top/tracks?limit=50");
+            } catch (MalformedURLException e) {
+                // it's not malformed, I just effin hardcoded it! :(
+                throw new RuntimeException("go kill yourself");
+            }
+            HttpURLConnection con = (HttpURLConnection) obj.openConnection();
+            con.setRequestMethod("GET");
+            con.setRequestProperty("Authorization", "Bearer " + token);
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(con.getInputStream()));
+            String inputLine;
+            StringBuffer response = new StringBuffer();
+
+            while ((inputLine = in.readLine()) != null) {
+                response.append(inputLine);
+            }
+            in.close();
+
+            for (Map<String, String> song : (List<Map<String, String>>)
+                    reco.parse_spotify_response(response.toString())) {
                 String uri = song.get("uri");
                 String artist = song.get("artist");
 
@@ -112,8 +140,9 @@ public class Moody {
                 //songs.add(new Metadata(artist, album, title));
                 Log.d(C.TAG, "adding spotify uri " + uri + " by " + artist);
             }
-        } catch (Exception e) {
-            Log.e(C.TAG, "problem with spotify: ", e);
+        } catch (IOException e) {
+            Log.e(C.TAG, "io problem with spotify: ", e);
+            e.printStackTrace();
         }
         //db.setTransactionSuccessful();
         //db.endTransaction();

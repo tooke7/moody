@@ -57,6 +57,7 @@ import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.SearchView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.jacobobryant.moody.C;
 import com.jacobobryant.moody.Moody;
@@ -208,10 +209,11 @@ public class LibraryActivity
 		mBottomBarControls.setOnQueryTextListener(this);
 		mBottomBarControls.enableOptionsMenu(this);
 
+		boolean init_moody = false;
 		if(PermissionRequestActivity.havePermissions(this) == false) {
 			PermissionRequestActivity.showWarning(this, getIntent());
 		} else {
-			Moody.getInstance(this);
+			init_moody = true;
 		}
 
 		mVanillaTabLayout = (VanillaTabLayout)findViewById(R.id.sliding_tabs);
@@ -225,6 +227,15 @@ public class LibraryActivity
 
 		loadAlbumIntent(getIntent());
 		bindControlButtons();
+
+		if (init_moody) {
+			new Thread() {
+				public void run() {
+					Moody.getInstance(LibraryActivity.this);
+				}
+			}.start();
+		}
+		Toast.makeText(this, "moody is loading", Toast.LENGTH_SHORT);
 
         // spotify stuff
         AuthenticationRequest.Builder builder =
