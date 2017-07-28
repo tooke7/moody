@@ -7,12 +7,10 @@
              [add_event [java.util.Map, boolean, long] void]
              [pick_next [] java.util.Map]
              [update_model [] void]
-             ^:static [spotify_thang [String] java.util.List]]
+             ^:static [parse_spotify_response [String] java.util.List]]
    :init init
    :constructors {[java.util.Collection] []})
-  ;(:require [clj-http.client :as client]
-  ;          [clojure.data.json :as json]))
-  )
+  (:require [clojure.data.json :as json]))
 
 (use '[clojure.set :only [intersection union difference]])
 (use '[clojure.math.combinatorics :only [combinations]])
@@ -403,15 +401,20 @@
 ;        (recur (.pick_next rec)
 ;               (rest actions))))))
 
-(defn -spotify_thang [token]
-  ;(let [;token "BQBgnAlhZiGA4TXPdKeFAr9iRq5bQ5vEPq3NPirb4bV01hIXh_FWeXrN1Kf3_JJWrLNZ1kwgfrDvmQBKIKmI3qfXv1sBCqqA5E833aCotbEl148SirYSUV-xFKypG9z5fhCHn2JqMkj2Ov-VOPgkW0opRBZH7UKP21Quef0qkowP5Lc"
-  ;      response (client/get "https://api.spotify.com/v1/me/top/tracks?limit=50"
-  ;                           {:headers {:Authorization (str "Bearer " token)}})
-  ;      data (json/read-str (:body response))]
-  ;  (map (fn [item] {"uri" (get item "uri")
-  ;                           "artist" (get-in item ["artists" 0 "name"])})
-  ;               (data "items"))))
-  [])
+;(defn -spotify_thang [token]
+;  (let [;token "BQBgnAlhZiGA4TXPdKeFAr9iRq5bQ5vEPq3NPirb4bV01hIXh_FWeXrN1Kf3_JJWrLNZ1kwgfrDvmQBKIKmI3qfXv1sBCqqA5E833aCotbEl148SirYSUV-xFKypG9z5fhCHn2JqMkj2Ov-VOPgkW0opRBZH7UKP21Quef0qkowP5Lc"
+;        response (client/get "https://api.spotify.com/v1/me/top/tracks?limit=50"
+;                             {:headers {:Authorization (str "Bearer " token)}})
+;        data (json/read-str (:body response))]
+;    (map (fn [item] {"uri" (get item "uri")
+;                             "artist" (get-in item ["artists" 0 "name"])})
+;                 (data "items"))))
+
+(defn -parse_spotify_response [response]
+  (let [data (json/read-str response)]
+    (map (fn [item] {"uri" (get item "uri")
+                     "artist" (get-in item ["artists" 0 "name"])})
+         (data "items"))))
 
 
 (defn -main [& args]
