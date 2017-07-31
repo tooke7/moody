@@ -1,5 +1,9 @@
 # Source: https://raw.githubusercontent.com/github/gitignore/master/Android.gitignore
 
+libs
+moody.db
+testing
+
 # Built application files
 *.apk
 *.ap_
