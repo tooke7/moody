@@ -23,8 +23,8 @@ THE SOFTWARE.
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.jacobobryant.moody.vanilla"
     android:installLocation="auto"
-    android:versionCode="10495"
-    android:versionName="1.5">
+    android:versionCode="10496"
+    android:versionName="1.5.1">
 
     <uses-sdk
         android:minSdkVersion="15"
