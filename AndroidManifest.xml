@@ -23,8 +23,8 @@ THE SOFTWARE.
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.jacobobryant.moody.vanilla"
     android:installLocation="auto"
-    android:versionCode="10495"
-    android:versionName="1.5">
+    android:versionCode="10496"
+    android:versionName="1.5.1">
 
     <uses-sdk
         android:minSdkVersion="15"
@@ -39,7 +39,6 @@ THE SOFTWARE.
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <!-- This is needed for isWiredHeadsetOn() to work in some cases. (bug?) -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
     <application
         android:icon="@mipmap/ic_launcher"

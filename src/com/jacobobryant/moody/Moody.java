@@ -175,9 +175,9 @@ public class Moody {
         result.close();
         db.close();
 
-        Log.d(C.TAG, "updating model");
-        rec.update_model();
-        Log.d(C.TAG, "finished updating model");
+        //Log.d(C.TAG, "updating model");
+        //rec.update_model();
+        //Log.d(C.TAG, "finished updating model");
     }
 
     public void update(Song last_song, boolean skipped) {
