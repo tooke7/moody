@@ -4,9 +4,7 @@
    :state state
    :methods [[add_event [String, String, String, boolean, long] void]
              [add_event [String, String, String, boolean] void]
-             [add_event [java.util.Map, boolean, long] void]
              [pick_next [] java.util.Map]
-             [update_model [] void]
              ^:static [parse_spotify_response [String] java.util.List]]
    :init init
    :constructors {[java.util.Collection] []})
@@ -146,9 +144,10 @@
   (reduce + (map #(Math/pow (- (predicted (:deltas %) strength)
                                (:observed %)) 2) input-data)))
 
-(def strength-set (map #(Math/pow (/ % 5) 2) (range 2 30)))
+;(def strength-set (map #(Math/pow (/ % 5) 2) (range 2 30)))
+(def strength-set [0.2 0.5 1 1.5 2 3 5 8 13 21])
 (defn calc-freshness [event-vec song]
-  (pprint (map :day event-vec))
+  ;(pprint (map :day event-vec))
   (let [get-deltas (fn [i event] {:observed (if (:skipped event) 0 1)
                                   :deltas (map #(- (:day event) (:day %))
                                                (take i event-vec))})
@@ -156,10 +155,10 @@
         strength (apply min-key #(total-error input-data %) strength-set)
         day (/ (now) 86400)
         deltas (map (fn [e]
-                      (when (< day (:day e))
-                        (println "WARNING: now is " day " but then was " (:day e)))
+                      ;(when (< day (:day e))
+                      ;  (println "WARNING: now is " day " but then was " (:day e)))
                       (max (- day (:day e)) 0)) event-vec)]
-    (println "strength for " song ": " strength)
+    ;(println "strength for " song ": " strength)
     (predicted deltas strength)))
 
 (defn reset-candidates [candidates]
@@ -177,38 +176,43 @@
                           :content-score 1)])
                 candidates)))
 
+
+(defn internal-add-event
+  [this, mdata, skipped, timestamp]
+  (swap! (.state this)
+         (fn [state]
+           (let [time-delta (- timestamp (:last-time state))
+                 new-session (> time-delta ses-threshold)
+                 sessions (ses-append (:sessions state) mdata skipped new-session)
+                 new-model (when (and new-session (:model state))
+                             (mk-model (:sessions state)))]
+
+             (when (= new-session (= (count sessions)
+                                     (count (:sessions state))))
+               (println "WARNING: didn't create new session"))
+             (when (< timestamp (:last-time state))
+               (printf "WARNING: timestamp=%d but last-time=%d\n"
+                       timestamp (:last-time state)))
+
+             (cond-> state
+               true (assoc :last-time timestamp
+                           :sessions sessions)
+               true (update-in [:candidates mdata :event-vec]
+                               #(conj % (Event. (/ timestamp 86400) skipped)))
+               new-model (assoc :model new-model :candidates
+                                (reset-candidates (:candidates state)))
+               (:model state) (update-candidates mdata skipped))))))
+
 (defn -add_event
-  ([this, mdata, skipped, timestamp]
-   (swap! (.state this)
-          (fn [state]
-            (let [time-delta (- timestamp (:last-time state))
-                  new-session (> time-delta ses-threshold)
-                  sessions (ses-append (:sessions state) mdata skipped new-session)
-                  new-model (when (and new-session (:model state))
-                          (mk-model (:sessions state)))]
-
-              (when (= new-session (= (count sessions)
-                                      (count (:sessions state))))
-                (println "WARNING: didn't create new session"))
-              (when (< timestamp (:last-time state))
-                (printf "WARNING: timestamp=%d but last-time=%d\n"
-                        timestamp (:last-time state)))
-
-              (cond-> state
-                true (assoc :last-time timestamp
-                            :sessions sessions)
-                true (update-in [:candidates mdata :event-vec]
-                                #(conj % (Event. (/ timestamp 86400) skipped)))
-                new-model (assoc :model new-model :candidates
-                                 (reset-candidates (:candidates state)))
-                (:model state) (update-candidates mdata skipped))))))
   ([this, artist, album, title, skipped, timestamp]
-   (.add_event this {"artist" artist "album" album "title" title}
+   (internal-add-event this {"artist" artist "album" album "title" title}
                skipped timestamp))
   ([this, artist, album, title, skipped]
-   (.add_event this artist album title skipped (now))))
+   (internal-add-event this {"artist" artist "album" album "title" title}
+               skipped (now))))
 
-(defn -update_model [this]
+(defn init-model [this]
+  (println "init model")
   (swap! (.state this)
          (fn [state]
            (let [[old-sessions cur-session]
@@ -253,6 +257,8 @@
              (remove nil? choices)))))
 
 (defn -pick_next [this]
+  (when (not (:model @@this))
+    (init-model this))
   (pick-next @@this))
 
 (defn -deref [this]
@@ -305,7 +311,7 @@
     (.add_event rec "a" "a" "a" false 4000)
     (.add_event rec "b" "b" "b" false 4000)
 
-    (.update_model rec)
+    ;(.update_model rec)
 
     (assert (= (:sessions @@rec)
                '({{"artist" "a", "album" "a", "title" "a"} false,
@@ -336,7 +342,7 @@
                       title (range n)]
                   {"artist" artist "album" artist "title" title})
         rec (new reco.reco library)]
-    (.update_model rec)
+    ;(.update_model rec)
     (doseq [action skip-sequence]
       (.add_event rec (.pick_next rec) action (now)))
     (test=
@@ -348,7 +354,7 @@
                       title (range n)]
                   {"artist" artist "album" artist "title" title})
         rec (new reco.reco library)]
-    (.update_model rec)
+    ;(.update_model rec)
     (doseq [action skip-sequence]
       (let [n (.pick_next rec)]
         (.add_event rec n action (now))))
@@ -384,8 +390,8 @@
 ;
 ;    (dbg "sessions length" (count (:sessions @@rec)))
 ;
-;    (println "updating model")
-;    (.update_model rec)
+;    ;(println "updating model")
+;    ;(.update_model rec)
 ;    (dbg "model length" (count (:model @@rec)))
 ;
 ;    (println "making recommendations")
@@ -393,13 +399,14 @@
 ;    (loop [next-song (.pick_next rec)
 ;           actions [true true false true false false true true]]
 ;           ;actions (repeat 500 true)]
-;      (when (not (empty? actions))
-;        (pprint next-song)
-;        (println (if (first actions) "skip" "listen"))
-;        (println)
-;        (.add_event rec next-song (first actions) (now))
-;        (recur (.pick_next rec)
-;               (rest actions))))))
+;      (let [{title "title" album "album" artist "artist"} next-song]
+;        (when (not (empty? actions))
+;          (pprint next-song)
+;          (println (if (first actions) "skip" "listen"))
+;          (println)
+;          (.add_event rec artist album title (first actions))
+;          (recur (.pick_next rec)
+;                 (rest actions)))))))
 
 ;(defn -spotify_thang [token]
 ;  (let [;token "BQBgnAlhZiGA4TXPdKeFAr9iRq5bQ5vEPq3NPirb4bV01hIXh_FWeXrN1Kf3_JJWrLNZ1kwgfrDvmQBKIKmI3qfXv1sBCqqA5E833aCotbEl148SirYSUV-xFKypG9z5fhCHn2JqMkj2Ov-VOPgkW0opRBZH7UKP21Quef0qkowP5Lc"
