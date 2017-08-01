@@ -4,7 +4,6 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.content.ContentResolver;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
@@ -12,19 +11,12 @@ import android.provider.MediaStore;
 import android.util.Log;
 
 import com.jacobobryant.moody.vanilla.BuildConfig;
-import com.jacobobryant.moody.vanilla.PlaybackService;
-import com.jacobobryant.moody.vanilla.PrefKeys;
 import com.jacobobryant.moody.vanilla.Song;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -73,87 +65,42 @@ public class Moody {
         Log.d(C.TAG, "setting periodic sync: " + SYNC_INTERVAL);
         ContentResolver.addPeriodicSync(newAccount, AUTHORITY, Bundle.EMPTY, SYNC_INTERVAL);
 
-        // read in old data
+        // read local songs
         final String[] proj = {MediaStore.Audio.Media.TITLE,
                                MediaStore.Audio.Media.ARTIST,
                                MediaStore.Audio.Media.ALBUM,
                                MediaStore.Audio.Media.DURATION,
         };
-
         Cursor result = context.getContentResolver().query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, proj, null, null, null);
-        SQLiteDatabase db = new Database(context).getWritableDatabase();
-        db.beginTransaction();
-
         songs = new ArrayList<>();
-        // get metadata for all the user's songs
         result.moveToPosition(-1);
         while (result.moveToNext()) {
             String title = result.getString(0);
             String artist = result.getString(1);
             String album = result.getString(2);
-
-            // TODO change ON CONFLICT thing to UPDATE?
-            db.execSQL("INSERT INTO songs (artist, album, title) VALUES (?, ?, ?)",
-                    new String[] {artist, album, title});
-
             songs.add(new Metadata(artist, album, title));
         }
-
-        db.setTransactionSuccessful();
-        db.endTransaction();
+        add_to_library(context, songs);
         result.close();
 
-        // get spotify songs
-        //db.beginTransaction();
-        SharedPreferences settings = PlaybackService.getSettings(context);
-        String token = settings.getString(PrefKeys.SPOTIFY_TOKEN, null);
-        try {
-            // query spotify
-            URL obj;
-            try {
-                obj = new URL("https://api.spotify.com/v1/me/top/tracks?limit=50");
-            } catch (MalformedURLException e) {
-                // it's not malformed, I just effin hardcoded it! :(
-                throw new RuntimeException("go kill yourself");
-            }
-            HttpURLConnection con = (HttpURLConnection) obj.openConnection();
-            con.setRequestMethod("GET");
-            con.setRequestProperty("Authorization", "Bearer " + token);
-            BufferedReader in = new BufferedReader(
-                    new InputStreamReader(con.getInputStream()));
-            String inputLine;
-            StringBuffer response = new StringBuffer();
-
-            while ((inputLine = in.readLine()) != null) {
-                response.append(inputLine);
-            }
-            in.close();
-
-            for (Map<String, String> song : (List<Map<String, String>>)
-                    reco.parse_spotify_response(response.toString())) {
-                String uri = song.get("uri");
-                String artist = song.get("artist");
-
-                //db.execSQL("INSERT INTO songs (artist, title) " +
-                //        "VALUES (?, ?, ?)", new String[] {artist, uri});
-                //songs.add(new Metadata(artist, album, title));
-                Log.d(C.TAG, "adding spotify uri " + uri + " by " + artist);
-            }
-        } catch (IOException e) {
-            Log.e(C.TAG, "io problem with spotify: ", e);
-            e.printStackTrace();
+        // get library
+        SQLiteDatabase db = new Database(context).getReadableDatabase();
+        List<Map<String, String>> library = new ArrayList<>();
+        result = db.rawQuery("SELECT artist, album, title FROM songs", null);
+        result.moveToPosition(-1);
+        while (result.moveToNext()) {
+            String artist = result.getString(0);
+            String album  = result.getString(1);
+            String title  = result.getString(2);
+            library.add(new Metadata(artist, album, title).toMap());
         }
-        //db.setTransactionSuccessful();
-        //db.endTransaction();
-        Log.d(C.TAG, "finished spotify thang");
-
-        rec = new reco(conv(songs));
+        result.close();
+        rec = new reco(library);
 
         // read in past skip data
         result = db.rawQuery("SELECT artist, album, title, skipped, time " +
                 "FROM songs JOIN events ON songs._id = events.song_id " +
-                //"WHERE algorithm != 0", null);
                 "ORDER BY time ASC", null);
         result.moveToPosition(-1);
         while (result.moveToNext()) {
@@ -174,10 +121,6 @@ public class Moody {
         }
         result.close();
         db.close();
-
-        //Log.d(C.TAG, "updating model");
-        //rec.update_model();
-        //Log.d(C.TAG, "finished updating model");
     }
 
     public void update(Song last_song, boolean skipped) {
@@ -203,7 +146,6 @@ public class Moody {
             result.moveToPosition(0);
             id = result.getInt(0);
         } else {
-            db.beginTransaction();
             db.execSQL("INSERT INTO songs (artist, album, title) " +
                        "VALUES (?, ?, ?)",
                     new String[] {last_song.artist, last_song.album, last_song.title});
@@ -211,8 +153,6 @@ public class Moody {
             idCursor.moveToPosition(0);
             id = idCursor.getInt(0);
             idCursor.close();
-            db.setTransactionSuccessful();
-            db.endTransaction();
         }
         db.execSQL("INSERT INTO events (song_id, skipped, algorithm) VALUES (?, ?, ?)",
                 new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
@@ -241,5 +181,45 @@ public class Moody {
             ret.add(song.toMap());
         }
         return ret;
+    }
+
+    public static void add_to_library(Context c, List<Metadata> songs) {
+        SQLiteDatabase db = new Database(c).getWritableDatabase();
+        db.beginTransaction();
+        for (Metadata s : songs) {
+            StringBuilder query = new StringBuilder();
+            List<String> args = new LinkedList<>();
+            query.append("select count(*) from songs where ");
+            if (s.artist != null) {
+                query.append("artist=?");
+                args.add(s.artist);
+            } else {
+                query.append("artist is null");
+            }
+            if (s.album != null) {
+                query.append(" and album=?");
+                args.add(s.album);
+            } else {
+                query.append(" and album is null");
+            }
+            if (s.title != null) {
+                query.append(" and title=?");
+                args.add(s.title);
+            } else {
+                query.append(" and title is null");
+            }
+            Cursor result = db.rawQuery(query.toString(),
+                    args.toArray(new String[args.size()]));
+
+            result.moveToFirst();
+            long count = result.getLong(0);
+            if (count == 0) {
+                db.execSQL("INSERT INTO songs (artist, album, title) " +
+                        "VALUES (?, ?, ?)",
+                        new String[] {s.artist, s.album, s.title});
+            }
+        }
+        db.setTransactionSuccessful();
+        db.endTransaction();
     }
 }

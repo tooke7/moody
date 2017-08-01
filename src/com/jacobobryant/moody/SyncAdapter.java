@@ -10,6 +10,11 @@ import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.util.Log;
 
+import com.jacobobryant.moody.vanilla.PlaybackService;
+import com.jacobobryant.moody.vanilla.PrefKeys;
+
+import org.apache.commons.io.FileUtils;
+
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
@@ -18,10 +23,12 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
-import org.apache.commons.io.FileUtils;
 
-import com.jacobobryant.moody.vanilla.PrefKeys;
+import reco.reco;
 
 public class SyncAdapter extends AbstractThreadedSyncAdapter {
     Context context;
@@ -56,14 +63,16 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
                               ContentProviderClient provider, SyncResult syncResult) {
         try {
             Log.d(C.TAG, "onPerformSync()");
-            sync(context);
+            syncDb(context);
+            getSpotifySongs(context);
         } catch (Exception e) {
             //ACRA.getErrorReporter().handleException(e);
             Log.e(C.TAG, "couldn't upload db", e);
+            e.printStackTrace();
         }
     }
 
-    public static void sync(Context context) {
+    public static void syncDb(Context context) {
         try {
             URL url;
             try {
@@ -102,6 +111,46 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         } catch (IOException e) {
             Log.e(C.TAG, e.getMessage());
         }
+    }
+
+    public void getSpotifySongs(Context context) throws IOException {
+        // get spotify songs
+        SharedPreferences settings = PlaybackService.getSettings(context);
+        String token = settings.getString(PrefKeys.SPOTIFY_TOKEN, null);
+        if (token == null) {
+            return;
+        }
+
+        // query spotify
+        URL obj;
+        try {
+            obj = new URL("https://api.spotify.com/v1/me/top/tracks?limit=50");
+        } catch (MalformedURLException e) {
+            throw new RuntimeException();
+        }
+        HttpURLConnection con = (HttpURLConnection) obj.openConnection();
+        con.setRequestMethod("GET");
+        con.setRequestProperty("Authorization", "Bearer " + token);
+        BufferedReader in = new BufferedReader(
+                new InputStreamReader(con.getInputStream()));
+        String inputLine;
+        StringBuffer response = new StringBuffer();
+
+        while ((inputLine = in.readLine()) != null) {
+            response.append(inputLine);
+        }
+        in.close();
+
+        List<Metadata> songs = new LinkedList<>();
+        for (Map<String, String> song : (List<Map<String, String>>)
+                reco.parse_spotify_response(response.toString())) {
+            String uri = song.get("uri");
+            String artist = song.get("artist");
+            Log.d(C.TAG, "adding spotify uri " + uri + " by " + artist);
+            songs.add(new Metadata(artist, null, uri));
+        }
+        Moody.add_to_library(context, songs);
+        Log.d(C.TAG, "finished spotify thang");
     }
 
     private static String getUserId(Context context) {

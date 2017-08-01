@@ -182,6 +182,7 @@ public class LibraryActivity
 	@Override
 	public void onCreate(Bundle state)
 	{
+        Log.d(C.TAG, "LibraryActivity.onCreate()");
 		ThemeHelper.setTheme(this, R.style.Library);
 		super.onCreate(state);
 
@@ -228,14 +229,14 @@ public class LibraryActivity
 		loadAlbumIntent(getIntent());
 		bindControlButtons();
 
+		Toast.makeText(this, "Loading...", Toast.LENGTH_LONG);
 		if (init_moody) {
-			new Thread() {
-				public void run() {
+			//new Thread() {
+			//	public void run() {
 					Moody.getInstance(LibraryActivity.this);
-				}
-			}.start();
+		//		}
+		//	}.start();
 		}
-		Toast.makeText(this, "moody is loading", Toast.LENGTH_SHORT);
 
         // spotify stuff
         AuthenticationRequest.Builder builder =
@@ -244,9 +245,9 @@ public class LibraryActivity
         builder.setScopes(new String[]{"user-read-private", "streaming",
                 "user-top-read"});
         AuthenticationRequest request = builder.build();
-
         AuthenticationClient.openLoginActivity(this, 666, request);
 
+        Log.d(C.TAG, "finished LibraryActivity.onCreate()");
 	}
 
     @Override
