@@ -23,9 +23,10 @@
 
 package com.jacobobryant.moody.vanilla;
 
-import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.database.Cursor;
+import android.os.StrictMode;
 import android.util.Log;
 
 import com.jacobobryant.moody.C;
@@ -34,9 +35,14 @@ import com.jacobobryant.moody.Moody;
 
 import junit.framework.Assert;
 
+import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -44,8 +50,10 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
 
 import ch.blinkenlights.android.medialibrary.MediaLibrary;
+import reco.reco;
 
 /**
  * Contains the list of currently playing songs, implements repeat and shuffle
@@ -658,47 +666,58 @@ public final class SongTimeline {
 
         if (delta == 1) {
             Moody moody = Moody.getInstance(mContext);
-            moody.update(mSongs.get(mCurrentPos), skipped);
+            moody.update(mSongs.get(Math.min(mSongs.size() - 1, mCurrentPos)),
+                        skipped);
             Metadata next;
 
             do {
                 next = moody.pick_next();
-
-                // construct the query
-                StringBuilder selection = new StringBuilder();
-                List<String> args = new LinkedList<>();
-                if (next.artist != null) {
-                    selection.append("artist=?");
-                    args.add(next.artist);
-                }
-                if (next.album != null) {
-                    if (selection.length() > 0) {
-                        selection.append(" AND ");
+                if (next.title.contains("spotify:track:")) {
+                    try {
+						Song song = get_metadata(next.title);
+						int index = Math.min(mSongs.size(), mCurrentPos + 1);
+						mSongs.add(index, song);
+						break;
+					} catch (IOException e) {
+						throw new RuntimeException(e);
+					}
+                } else {
+                    // construct the query
+                    StringBuilder selection = new StringBuilder();
+                    List<String> args = new LinkedList<>();
+                    if (next.artist != null) {
+                        selection.append("artist=?");
+                        args.add(next.artist);
                     }
-                    selection.append("album=?");
-                    args.add(next.album);
-                }
-                if (next.title != null) {
-                    if (selection.length() > 0) {
-                        selection.append(" AND ");
+                    if (next.album != null) {
+                        if (selection.length() > 0) {
+                            selection.append(" AND ");
+                        }
+                        selection.append("album=?");
+                        args.add(next.album);
                     }
-                    selection.append("title=?");
-                    args.add(next.title);
-                }
-                String[] argsArray = args.toArray(new String[args.size()]);
+                    if (next.title != null) {
+                        if (selection.length() > 0) {
+                            selection.append(" AND ");
+                        }
+                        selection.append("title=?");
+                        args.add(next.title);
+                    }
+                    String[] argsArray = args.toArray(new String[args.size()]);
 
-                // add the next song
-                QueryTask query = new QueryTask(MediaLibrary.VIEW_SONGS_ALBUMS_ARTISTS,
-                        Song.FILLED_PLAYLIST_PROJECTION, selection.toString(),
-                        argsArray, null);
-                //query.mode = MODE_ENQUEUE_AS_NEXT;
-                query.mode = MODE_FLUSH_AND_PLAY_NEXT;
-                int num = addSongs(mContext, query);
-                if (num != 0) {
-                    break;
+                    // add the next song
+                    QueryTask query = new QueryTask(MediaLibrary.VIEW_SONGS_ALBUMS_ARTISTS,
+                            Song.FILLED_PLAYLIST_PROJECTION, selection.toString(),
+                            argsArray, null);
+                    //query.mode = MODE_ENQUEUE_AS_NEXT;
+                    query.mode = MODE_FLUSH_AND_PLAY_NEXT;
+                    int num = addSongs(mContext, query);
+                    if (num != 0) {
+                        break;
+                    }
+                    Log.e(C.TAG, "couldn't add song: " + next);
+                    moody.rec.add_event(next.artist, next.album, next.title, true);
                 }
-                Log.e(C.TAG, "couldn't add song: " + next);
-                moody.rec.add_event(next.artist, next.album, next.title, true);
             } while (true);
             //moody.reco.cache(next);
         }
@@ -720,6 +739,53 @@ public final class SongTimeline {
 
 		mCurrentPos = pos;
 	}
+
+
+    public Song get_metadata(String uri) throws IOException {
+        // hee hee hee
+        StrictMode.ThreadPolicy policy =
+            new StrictMode.ThreadPolicy.Builder().permitAll().build();
+        StrictMode.setThreadPolicy(policy); 
+
+        // get spotify songs
+        SharedPreferences settings = PlaybackService.getSettings(mContext);
+        String token = settings.getString(PrefKeys.SPOTIFY_TOKEN, null);
+        if (token == null) {
+            throw new RuntimeException("no spotify token");
+        }
+
+        // query spotify
+        URL obj;
+        try {
+            obj = new URL("https://api.spotify.com/v1/tracks/" 
+                    + uri.substring(new String("spotify:track:").length()));
+        } catch (MalformedURLException e) {
+            throw new RuntimeException();
+        }
+        HttpURLConnection con = (HttpURLConnection) obj.openConnection();
+        con.setRequestMethod("GET");
+        con.setRequestProperty("Authorization", "Bearer " + token);
+        BufferedReader in = new BufferedReader(
+                new InputStreamReader(con.getInputStream()));
+        String inputLine;
+        StringBuffer response = new StringBuffer();
+
+        while ((inputLine = in.readLine()) != null) {
+            response.append(inputLine);
+        }
+        in.close();
+
+        Map<String, Object> s = (Map<String, Object>)
+                reco.parse_track(response.toString());
+        Song song = new Song(-1, Song.FLAG_NO_COVER);
+        song.path = uri;
+        song.title = (String)s.get("title");
+        song.album = (String)s.get("album");
+        song.artist = (String)s.get("artist");
+        song.duration = (long)s.get("duration");
+        return song;
+    }
+
 	
 	/**
 	 * Hard-Jump to given queue position

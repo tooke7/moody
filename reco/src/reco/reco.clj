@@ -5,7 +5,8 @@
    :methods [[add_event [String, String, String, boolean, long] void]
              [add_event [String, String, String, boolean] void]
              [pick_next [] java.util.Map]
-             ^:static [parse_spotify_response [String] java.util.List]]
+             ^:static [parse_spotify_response [String] java.util.List]
+             ^:static [parse_track [String] java.util.Map]]
    :init init
    :constructors {[java.util.Collection] []})
   (:require [clojure.data.json :as json]))
@@ -423,6 +424,12 @@
                      "artist" (get-in item ["artists" 0 "name"])})
          (data "items"))))
 
+(defn -parse_track [response]
+  (let [data (json/read-str response)]
+    {"title" (get data "name")
+     "artist" (get-in data ["artists" 0 "name"])
+     "album" (get-in data ["album" "name"])
+     "duration" (get data "duration_ms")}))
 
 (defn -main [& args]
   (println "starting up")

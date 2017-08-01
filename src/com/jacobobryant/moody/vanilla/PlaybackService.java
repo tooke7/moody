@@ -616,7 +616,7 @@ public final class PlaybackService extends Service
 		VanillaMediaPlayer mp = new VanillaMediaPlayer(this);
 		mp.setAudioStreamType(AudioManager.STREAM_MUSIC);
 		mp.setOnCompletionListener(this);
-		mp.setOnErrorListener(this);
+		//mp.setOnErrorListener(this);
 		return mp;
 	}
 
@@ -982,7 +982,7 @@ public final class PlaybackService extends Service
 				}
 
 				if (mMediaPlayerInitialized)
-					mMediaPlayer.start();
+					mMediaPlayer.resume();
 
 				if (mNotificationMode != NEVER)
 					startForeground(NOTIFICATION_ID, createNotification(mCurrentSong, mState, mNotificationMode));

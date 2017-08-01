@@ -21,9 +21,19 @@ package com.jacobobryant.moody.vanilla;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.media.MediaPlayer;
 import android.media.audiofx.AudioEffect;
 import android.os.Build;
+import android.util.Log;
+
+import com.jacobobryant.moody.C;
+import com.spotify.sdk.android.player.Config;
+import com.spotify.sdk.android.player.ConnectionStateCallback;
+import com.spotify.sdk.android.player.Player;
+import com.spotify.sdk.android.player.PlayerEvent;
+import com.spotify.sdk.android.player.Spotify;
+import com.spotify.sdk.android.player.SpotifyPlayer;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -36,6 +46,84 @@ public class VanillaMediaPlayer extends MediaPlayer {
 	private float mReplayGain = Float.NaN;
 	private float mDuckingFactor = Float.NaN;
 	private boolean mIsDucking = false;
+    private SpotPlayer mSP;
+    private MediaPlayer.OnCompletionListener mCompletionListener;
+
+    public class SpotPlayer implements SpotifyPlayer.NotificationCallback,
+			ConnectionStateCallback {
+        public Player mPlayer;
+
+        public SpotPlayer(Context context) {
+            SharedPreferences settings = PlaybackService.getSettings(context);
+            String token = settings.getString(PrefKeys.SPOTIFY_TOKEN, null);
+            if (token == null) {
+                throw new RuntimeException("spotify token is null");
+            }
+            Config playerConfig = new Config(context, token, C.CLIENT_ID);
+            Spotify.getPlayer(playerConfig, this, new SpotifyPlayer.InitializationObserver() {
+                @Override
+                public void onInitialized(SpotifyPlayer spotifyPlayer) {
+                    mPlayer = spotifyPlayer;
+                    mPlayer.addConnectionStateCallback(SpotPlayer.this);
+                    mPlayer.addNotificationCallback(SpotPlayer.this);
+                }
+
+                @Override
+                public void onError(Throwable throwable) {
+                    Log.e(C.TAG, "Could not initialize player: " + throwable.getMessage());
+                }
+            });
+        }
+
+        @Override
+        public void onPlaybackEvent(PlayerEvent playerEvent) {
+            Log.d(C.TAG, "Playback event received: " + playerEvent.name());
+            switch (playerEvent) {
+                // Handle event type as necessary
+                case kSpPlaybackNotifyAudioDeliveryDone:
+                    mCompletionListener.onCompletion(VanillaMediaPlayer.this);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        @Override
+        public void onPlaybackError(com.spotify.sdk.android.player.Error error) {
+            Log.d(C.TAG, "Playback error received: " + error.name());
+            switch (error) {
+                // Handle error type as necessary
+                default:
+                    break;
+            }
+        }
+
+        @Override
+        public void onLoggedIn() {
+            Log.d(C.TAG, "User logged in");
+            //mPlayer.playUri(null, "spotify:track:2TpxZ7JUBn3uw46aR7qd6V", 0, 0);
+        }
+
+        @Override
+        public void onLoggedOut() {
+            Log.d(C.TAG, "User logged out");
+        }
+
+        @Override
+        public void onLoginFailed(com.spotify.sdk.android.player.Error i) {
+            Log.d(C.TAG, "Login failed");
+        }
+
+        @Override
+        public void onTemporaryError() {
+            Log.d(C.TAG, "Temporary error occurred");
+        }
+
+        @Override
+        public void onConnectionMessage(String message) {
+            Log.d(C.TAG, "Received connection message: " + message);
+        }
+    }
 
 	/**
 	 * Constructs a new VanillaMediaPlayer class
@@ -43,6 +131,7 @@ public class VanillaMediaPlayer extends MediaPlayer {
 	public VanillaMediaPlayer(Context context) {
 		super();
 		mContext = context;
+        mSP = new SpotPlayer(context);
 	}
 
 	/**
@@ -51,6 +140,7 @@ public class VanillaMediaPlayer extends MediaPlayer {
 	public void reset() {
 		mDataSource = null;
 		mHasNextMediaPlayer = false;
+        
 		super.reset();
 	}
 
@@ -60,6 +150,7 @@ public class VanillaMediaPlayer extends MediaPlayer {
 	public void release() {
 		mDataSource = null;
 		mHasNextMediaPlayer = false;
+        Spotify.destroyPlayer(mSP);
 		super.release();
 	}
 
@@ -70,10 +161,12 @@ public class VanillaMediaPlayer extends MediaPlayer {
 		// The MediaPlayer function expects a file:// like string but also accepts *most* absolute unix paths (= paths with no colon)
 		// We could therefore encode the path into a full URI, but a much quicker way is to simply use
 		// setDataSource(FileDescriptor) as the framework code would end up calling this function anyways (MediaPlayer.java:1100 (6.0))
-		FileInputStream fis = new FileInputStream(path);
-		super.setDataSource(fis.getFD());
-		fis.close(); // this is OK according to the SDK documentation!
-		mDataSource = path;
+        if (!path.contains("spotify:track:")) {
+            FileInputStream fis = new FileInputStream(path);
+            super.setDataSource(fis.getFD());
+            fis.close(); // this is OK according to the SDK documentation!
+        }
+        mDataSource = path;
 	}
 
 	/**
@@ -166,4 +259,77 @@ public class VanillaMediaPlayer extends MediaPlayer {
 		setVolume(volume, volume);
 	}
 
+    @Override
+    public void prepare() throws IOException {
+        if (!isSpotifyTrack()) {
+            super.prepare();
+        }
+    }
+
+    @Override
+    public void start() {
+        Log.d(C.TAG, "VanillaMediaPlayer.start()");
+        if (isSpotifyTrack()) {
+            Log.d(C.TAG, "starting spotify track");
+            mSP.mPlayer.playUri(null, mDataSource, 0, 0);
+        } else {
+            super.start();
+        }
+    }
+
+    public void resume() {
+        Log.d(C.TAG, "VanillaMediaPlayer.resume()");
+        if (isSpotifyTrack()) {
+            mSP.mPlayer.resume(null);
+        } else {
+            super.start();
+        }
+    }
+
+    @Override
+    public void pause() {
+        if (isSpotifyTrack()) {
+            mSP.mPlayer.pause(null);
+        } else {
+            super.pause();
+        }
+    }
+
+    @Override
+    public int getDuration() {
+        if (isSpotifyTrack()) {
+            return (int)mSP.mPlayer.getMetadata().currentTrack.durationMs;
+        } else {
+            return super.getDuration();
+        }
+    }
+
+    @Override
+    public int getCurrentPosition() {
+        if (isSpotifyTrack()) {
+            return (int)mSP.mPlayer.getPlaybackState().positionMs;
+        } else {
+            return super.getCurrentPosition();
+        }
+    }
+
+    @Override
+    public void seekTo(int pos) {
+        if (isSpotifyTrack()) {
+            mSP.mPlayer.seekToPosition(null, pos);
+        } else {
+            super.seekTo(pos);
+        }
+    }
+
+    @Override
+    public void setOnCompletionListener(
+            MediaPlayer.OnCompletionListener listener) {
+        mCompletionListener = listener;
+        super.setOnCompletionListener(listener);
+    }
+
+    private boolean isSpotifyTrack() {
+        return (mDataSource != null) && mDataSource.contains("spotify:track:");
+    }
 }

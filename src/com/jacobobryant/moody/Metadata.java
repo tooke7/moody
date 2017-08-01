@@ -1,11 +1,16 @@
 package com.jacobobryant.moody;
 
+import com.jacobobryant.moody.vanilla.Song;
+
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import static com.jacobobryant.moody.Metadata.Type.*;
+import static com.jacobobryant.moody.Metadata.Type.ALBUM;
+import static com.jacobobryant.moody.Metadata.Type.ARTIST;
+import static com.jacobobryant.moody.Metadata.Type.GLOBAL;
+import static com.jacobobryant.moody.Metadata.Type.SONG;
 
 public class Metadata {
     public String title;
@@ -37,6 +42,10 @@ public class Metadata {
 
     public Metadata(Map<String, String> m) {
         this(m.get("artist"), m.get("album"), m.get("title"));
+    }
+
+    public Metadata(Song s) {
+        this(s.artist, s.album, s.title);
     }
 
     public Metadata() {

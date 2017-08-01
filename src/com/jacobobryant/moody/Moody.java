@@ -16,7 +16,6 @@ import com.jacobobryant.moody.vanilla.Song;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -120,6 +119,11 @@ public class Moody {
     }
 
     public void update(Song last_song, boolean skipped) {
+        if (last_song.path.contains("spotify:track:")) {
+            last_song.title = last_song.path;
+            last_song.album = null;
+        }
+
         // get the current algorithm. 0 means random.
         int algorithm;
         if (random_song != null && random_song.equals(new Metadata(last_song.artist,
@@ -134,9 +138,9 @@ public class Moody {
 
         // update db
         SQLiteDatabase db = new Database(context).getWritableDatabase();
-        Cursor result = db.rawQuery(
-                "SELECT _id FROM songs WHERE artist = ? AND album = ? AND title = ?",
-                new String[] {last_song.artist, last_song.album, last_song.title});
+        Metadata m = new Metadata(last_song);
+        Cursor result = db.rawQuery("SELECT _id FROM songs WHERE "
+                + match_clause(m), m.query());
         int id;
         if (result.getCount() > 0) {
             result.moveToPosition(0);
@@ -183,29 +187,8 @@ public class Moody {
         SQLiteDatabase db = new Database(c).getWritableDatabase();
         db.beginTransaction();
         for (Metadata s : songs) {
-            StringBuilder query = new StringBuilder();
-            List<String> args = new LinkedList<>();
-            query.append("select count(*) from songs where ");
-            if (s.artist != null) {
-                query.append("artist=?");
-                args.add(s.artist);
-            } else {
-                query.append("artist is null");
-            }
-            if (s.album != null) {
-                query.append(" and album=?");
-                args.add(s.album);
-            } else {
-                query.append(" and album is null");
-            }
-            if (s.title != null) {
-                query.append(" and title=?");
-                args.add(s.title);
-            } else {
-                query.append(" and title is null");
-            }
-            Cursor result = db.rawQuery(query.toString(),
-                    args.toArray(new String[args.size()]));
+            String query = "select count(*) from songs where " + match_clause(s);
+            Cursor result = db.rawQuery(query, s.query());
 
             result.moveToFirst();
             long count = result.getLong(0);
@@ -217,5 +200,25 @@ public class Moody {
         }
         db.setTransactionSuccessful();
         db.endTransaction();
+    }
+
+    private static String match_clause(Metadata s) {
+        StringBuilder clause = new StringBuilder();
+        if (s.artist != null) {
+            clause.append("artist=?");
+        } else {
+            clause.append("artist is null");
+        }
+        if (s.album != null) {
+            clause.append(" and album=?");
+        } else {
+            clause.append(" and album is null");
+        }
+        if (s.title != null) {
+            clause.append(" and title=?");
+        } else {
+            clause.append(" and title is null");
+        }
+        return clause.toString();
     }
 }
