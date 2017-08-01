@@ -34,10 +34,6 @@ public class Moody {
     private Account newAccount;
     public reco rec;
 
-    private String spotify_token;
-    private static final int REQUEST_CODE = 666;
-
-
     private Moody() { }
 
     public static Moody getInstance(Context context) {
