@@ -52,6 +52,8 @@ public class VanillaMediaPlayer extends MediaPlayer {
     public class SpotPlayer implements SpotifyPlayer.NotificationCallback,
 			ConnectionStateCallback {
         public Player mPlayer;
+        public boolean mLoggedIn = false;
+        public String mPendingSong;
 
         public SpotPlayer(Context context) {
             SharedPreferences settings = PlaybackService.getSettings(context);
@@ -80,9 +82,23 @@ public class VanillaMediaPlayer extends MediaPlayer {
             Log.d(C.TAG, "Playback event received: " + playerEvent.name());
             switch (playerEvent) {
                 // Handle event type as necessary
-                case kSpPlaybackNotifyAudioDeliveryDone:
+                //case kSpPlaybackNotifyAudioDeliveryDone:
+                case kSpPlaybackNotifyTrackDelivered:
                     mCompletionListener.onCompletion(VanillaMediaPlayer.this);
                     break;
+                //case kSpPlaybackNotifyMetadataChanged:
+                //    try {
+                //        Log.d(C.TAG, "timeline == null: " + (mTimeline == null));
+                //        Song s = mTimeline.getSong(0);
+                //        Metadata.Track mdata = mPlayer.getMetadata().currentTrack;
+                //        s.title = mdata.name;
+                //        s.album = mdata.albumName;
+                //        s.duration = mdata.durationMs;
+                //        Log.d(C.TAG, "set title: " + s.title);
+                //    } catch (NullPointerException e) { 
+                //        Log.e(C.TAG, "nullpointer", e);
+                //    }
+                //    break;
                 default:
                     break;
             }
@@ -93,6 +109,14 @@ public class VanillaMediaPlayer extends MediaPlayer {
             Log.d(C.TAG, "Playback error received: " + error.name());
             switch (error) {
                 // Handle error type as necessary
+                case kSpErrorFailed:
+                    mPendingSong = mDataSource;
+                    SharedPreferences settings = PlaybackService.getSettings(mContext);
+                    String token = settings.getString(PrefKeys.SPOTIFY_TOKEN, null);
+                    if (token == null) {
+                        throw new RuntimeException("spotify token is null");
+                    }
+                    mSP.mPlayer.login(token);
                 default:
                     break;
             }
@@ -101,11 +125,17 @@ public class VanillaMediaPlayer extends MediaPlayer {
         @Override
         public void onLoggedIn() {
             Log.d(C.TAG, "User logged in");
+            mLoggedIn = true;
+            if (mPendingSong != null) {
+                mSP.mPlayer.playUri(null, mDataSource, 0, 0);
+                mPendingSong = null;
+            }
             //mPlayer.playUri(null, "spotify:track:2TpxZ7JUBn3uw46aR7qd6V", 0, 0);
         }
 
         @Override
         public void onLoggedOut() {
+            mLoggedIn = false;
             Log.d(C.TAG, "User logged out");
         }
 
@@ -148,6 +178,7 @@ public class VanillaMediaPlayer extends MediaPlayer {
 	 * Releases the media player and frees any claimed AudioEffect
 	 */
 	public void release() {
+        pause();
 		mDataSource = null;
 		mHasNextMediaPlayer = false;
         Spotify.destroyPlayer(mSP);
@@ -271,8 +302,19 @@ public class VanillaMediaPlayer extends MediaPlayer {
         Log.d(C.TAG, "VanillaMediaPlayer.start()");
         if (isSpotifyTrack()) {
             Log.d(C.TAG, "starting spotify track");
-            mSP.mPlayer.playUri(null, mDataSource, 0, 0);
+            if (!mSP.mLoggedIn) {
+                mSP.mPendingSong = mDataSource;
+                SharedPreferences settings = PlaybackService.getSettings(mContext);
+                String token = settings.getString(PrefKeys.SPOTIFY_TOKEN, null);
+                if (token == null) {
+                    throw new RuntimeException("spotify token is null");
+                }
+                mSP.mPlayer.login(token);
+            } else {
+                mSP.mPlayer.playUri(null, mDataSource, 0, 0);
+            }
         } else {
+            mSP.mPlayer.pause(null);
             super.start();
         }
     }
@@ -298,7 +340,12 @@ public class VanillaMediaPlayer extends MediaPlayer {
     @Override
     public int getDuration() {
         if (isSpotifyTrack()) {
-            return (int)mSP.mPlayer.getMetadata().currentTrack.durationMs;
+            try {
+                return (int)mSP.mPlayer.getMetadata().currentTrack.durationMs;
+            } catch (NullPointerException e) {
+                Log.e(C.TAG, "couldn't get duration:", e);
+                return 0;
+            }
         } else {
             return super.getDuration();
         }
@@ -327,6 +374,24 @@ public class VanillaMediaPlayer extends MediaPlayer {
             MediaPlayer.OnCompletionListener listener) {
         mCompletionListener = listener;
         super.setOnCompletionListener(listener);
+    }
+
+    @Override
+    public boolean isPlaying() {
+        if (isSpotifyTrack()) {
+            return mSP.mPlayer.getPlaybackState().isPlaying;
+        } else {
+            return super.isPlaying();
+        }
+    }
+
+    @Override
+    public void stop() {
+        if (isSpotifyTrack()) {
+            mSP.mPlayer.pause(null);
+        } else {
+            super.stop();
+        }
     }
 
     private boolean isSpotifyTrack() {

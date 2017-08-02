@@ -4,12 +4,14 @@
    :state state
    :methods [[add_event [String, String, String, boolean, long] void]
              [add_event [String, String, String, boolean] void]
-             [pick_next [] java.util.Map]
+             [pick_next [boolean] java.util.Map]
+             [add_to_blacklist [java.util.Map] void]
              ^:static [parse_spotify_response [String] java.util.List]
              ^:static [parse_track [String] java.util.Map]]
    :init init
    :constructors {[java.util.Collection] []})
-  (:require [clojure.data.json :as json]))
+  (:require [clojure.data.json :as json]
+            [clojure.string :as str]))
 
 (use '[clojure.set :only [intersection union difference]])
 (use '[clojure.math.combinatorics :only [combinations]])
@@ -54,7 +56,14 @@
     [[] (atom {:candidates (zipmap songs candidates)
                :sessions '()
                :last-time 0
-               :model nil})]))
+               :model nil
+               :blacklist []})]))
+
+(defn -add_to_blacklist [this song]
+  (println "adding to blacklist:" song)
+  (swap! (.state this)
+         (fn [state]
+           (update state :blacklist #(conj % (into {} song))))))
 
 (defn ses-append [sessions mdata skipped create-session]
   (if create-session
@@ -242,11 +251,16 @@
     :main
     :content))
 
-(defn pick-next [{candidates :candidates sessions :sessions}]
+(defn pick-next [{candidates :candidates sessions :sessions
+                  blacklist :blacklist} local-only]
   (let [cur-session (set (keys (first sessions)))
         cand-list (as-> candidates x 
                     (apply dissoc x cur-session)
+                    (apply dissoc x blacklist)
                     (map (fn [[k v]] (assoc v :mdata k)) x)
+                    (remove #(and local-only
+                                  (str/starts-with? (get-in % [:mdata "title"])
+                                    "spotify:track:")) x)
                     (shuffle x))
         {main-choices :main content-choices :content} (group-by assign cand-list)
         choices (map #(if (empty? %2) nil (apply max-key %1 %2))
@@ -257,10 +271,10 @@
     (:mdata ((if (< (rand) 0.6) first last)
              (remove nil? choices)))))
 
-(defn -pick_next [this]
+(defn -pick_next [this local-only]
   (when (not (:model @@this))
     (init-model this))
-  (pick-next @@this))
+  (pick-next @@this local-only))
 
 (defn -deref [this]
   (.state this))

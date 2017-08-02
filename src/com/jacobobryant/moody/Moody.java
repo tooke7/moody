@@ -32,6 +32,7 @@ public class Moody {
     public static final String ACCOUNT = "moodyaccount";
     private Account newAccount;
     public reco rec;
+    public boolean next_on_blacklist = false;
 
     private Moody() { }
 
@@ -118,10 +119,22 @@ public class Moody {
         db.close();
     }
 
-    public void update(Song last_song, boolean skipped) {
+    public void update(Song last, boolean skipped) {
+        Song last_song = new Song(-1);
+        last_song.title = last.title;
+        last_song.album = last.album;
+        last_song.artist = last.artist;
+        last_song.path = last.path;
+
         if (last_song.path.contains("spotify:track:")) {
             last_song.title = last_song.path;
             last_song.album = null;
+        }
+
+        if (next_on_blacklist) {
+            //rec.add_to_blacklist(new Metadata(last_song).toMap());
+            next_on_blacklist = false;
+            return;
         }
 
         // get the current algorithm. 0 means random.
@@ -161,17 +174,32 @@ public class Moody {
         db.close();
     }
 
-    public Metadata pick_next() {
+    public Metadata pick_next(boolean local_only) {
         float CONTROL_PROB = 0.2f;
 
         // suggest a random song every now and then for evaluation purposes.
         if (Math.random() < CONTROL_PROB) {
-            int item = new Random().nextInt(songs.size());
-            random_song = songs.get(item);
-            Log.d(C.TAG, "suggesting random song: " + random_song);
-            return random_song;
+            List<Metadata> universe = new ArrayList<>();
+            for (Metadata song : songs) {
+                if (!local_only || !song.title.startsWith("spotify:track:")) {
+                    universe.add(song);
+                }
+            }
+            if (universe.size() > 0) {
+                int item = new Random().nextInt(universe.size());
+                random_song = universe.get(item);
+                Log.d(C.TAG, "suggesting random song: " + random_song);
+                return random_song;
+            } else {
+                return null;
+            }
         } else {
-          return new Metadata(rec.pick_next());
+            Map ret = rec.pick_next(local_only);
+            if (ret == null) {
+                return null;
+            } else {
+                return new Metadata(ret);
+            }
         }
     }
 

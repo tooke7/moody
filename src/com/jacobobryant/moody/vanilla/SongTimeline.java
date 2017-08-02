@@ -344,6 +344,7 @@ public final class SongTimeline {
 				// Fill the selection with the ids of all the saved songs
 				// and initialize the timeline with unpopulated songs.
 				StringBuilder selection = new StringBuilder(MediaLibrary.SongColumns._ID+" IN (");
+                int foo = 0;
 				for (int i = 0; i != n; ++i) {
 					long id = in.readLong();
 					if (id == -1)
@@ -353,9 +354,10 @@ public final class SongTimeline {
 					int flags = in.readInt() & ~(~0 << Song.FLAG_COUNT) | i << Song.FLAG_COUNT;
 					songs.add(new Song(id, flags));
 
-					if (i != 0)
+					if (foo != 0)
 						selection.append(',');
 					selection.append(id);
+                    foo++;
 				}
 				selection.append(')');
 
@@ -666,20 +668,34 @@ public final class SongTimeline {
 
         if (delta == 1) {
             Moody moody = Moody.getInstance(mContext);
-            moody.update(mSongs.get(Math.min(mSongs.size() - 1, mCurrentPos)),
-                        skipped);
+            try {
+                moody.update(mSongs.get(mCurrentPos), skipped);
+            } catch (ArrayIndexOutOfBoundsException e) { 
+                Log.e(C.TAG, "couldn't call moody.update");
+            }
             Metadata next;
 
+            boolean local_only = false;
             do {
-                next = moody.pick_next();
-                if (next.title.contains("spotify:track:")) {
+                next = moody.pick_next(local_only);
+                if (next == null) {
+                    mSongs.clear();
+                    mCurrentPos = 0;
+                    delta = 0;
+                    return;
+                } else if (next.title.contains("spotify:track:")) {
                     try {
 						Song song = get_metadata(next.title);
+                        //Song song = new Song(-1, Song.FLAG_NO_COVER);
+                        //song.title = next.title;
+                        //song.path = next.title;
+                        //song.artist = next.artist;
 						int index = Math.min(mSongs.size(), mCurrentPos + 1);
 						mSongs.add(index, song);
 						break;
 					} catch (IOException e) {
-						throw new RuntimeException(e);
+                        Log.e(C.TAG, "no network", e);
+                        local_only = true;
 					}
                 } else {
                     // construct the query
@@ -716,7 +732,7 @@ public final class SongTimeline {
                         break;
                     }
                     Log.e(C.TAG, "couldn't add song: " + next);
-                    moody.rec.add_event(next.artist, next.album, next.title, true);
+                    moody.rec.add_to_blacklist(next.toMap());
                 }
             } while (true);
             //moody.reco.cache(next);
