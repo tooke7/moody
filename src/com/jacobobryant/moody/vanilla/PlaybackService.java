@@ -320,7 +320,7 @@ public final class PlaybackService extends Service
 	private Looper mLooper;
 	private Handler mHandler;
 	VanillaMediaPlayer mMediaPlayer;
-	VanillaMediaPlayer mPreparedMediaPlayer;
+	//VanillaMediaPlayer mPreparedMediaPlayer;
 	private boolean mMediaPlayerInitialized;
 	private boolean mMediaPlayerAudioFxActive;
 	private PowerManager.WakeLock mWakeLock;
@@ -433,9 +433,9 @@ public final class PlaybackService extends Service
 		int state = loadState();
 
 		mMediaPlayer = getNewMediaPlayer();
-		mPreparedMediaPlayer = getNewMediaPlayer();
+		//mPreparedMediaPlayer = getNewMediaPlayer();
 		// We only have a single audio session
-		mPreparedMediaPlayer.setAudioSessionId(mMediaPlayer.getAudioSessionId());
+		//mPreparedMediaPlayer.setAudioSessionId(mMediaPlayer.getAudioSessionId());
 
 		mBastpUtil = new BastpUtil();
 		mReadahead = new ReadaheadThread();
@@ -589,10 +589,10 @@ public final class PlaybackService extends Service
 			mMediaPlayer = null;
 		}
 
-		if (mPreparedMediaPlayer != null) {
-			mPreparedMediaPlayer.release();
-			mPreparedMediaPlayer = null;
-		}
+		//if (mPreparedMediaPlayer != null) {
+		//	mPreparedMediaPlayer.release();
+		//	mPreparedMediaPlayer = null;
+		//}
 
 		try {
 			unregisterReceiver(mReceiver);
@@ -654,13 +654,13 @@ public final class PlaybackService extends Service
 	*/
 	private void refreshReplayGainValues() {
 		applyReplayGain(mMediaPlayer);
-		applyReplayGain(mPreparedMediaPlayer);
+		//applyReplayGain(mPreparedMediaPlayer);
 	}
 
 	private void refreshDuckingValues() {
 		float duckingFactor = ((float) mVolumeDuringDucking)/100f;
 		mMediaPlayer.setDuckingFactor(duckingFactor);
-		mPreparedMediaPlayer.setDuckingFactor(duckingFactor);
+		//mPreparedMediaPlayer.setDuckingFactor(duckingFactor);
 	}
 
 	/***
@@ -760,23 +760,23 @@ public final class PlaybackService extends Service
 
 		//if(doGapless == true) {
         if (false) {
-			try {
-				if(nextSong.path.equals(mPreparedMediaPlayer.getDataSource()) == false) {
-					// Prepared MP has a different data source: We need to re-initalize
-					// it and set it as the next MP for the active media player
-					mPreparedMediaPlayer.reset();
-					prepareMediaPlayer(mPreparedMediaPlayer, nextSong.path);
-					mMediaPlayer.setNextMediaPlayer(mPreparedMediaPlayer);
-				}
-				if(mMediaPlayer.hasNextMediaPlayer() == false) {
-					// We can reuse the prepared MediaPlayer but the current instance lacks
-					// a link to it
-					mMediaPlayer.setNextMediaPlayer(mPreparedMediaPlayer);
-				}
-			} catch (IOException e) {
-				mMediaPlayer.setNextMediaPlayer(null);
-				mPreparedMediaPlayer.reset();
-			}
+			//try {
+			//	//if(nextSong.path.equals(mPreparedMediaPlayer.getDataSource()) == false) {
+			//	//	// Prepared MP has a different data source: We need to re-initalize
+			//	//	// it and set it as the next MP for the active media player
+			//	//	mPreparedMediaPlayer.reset();
+			//	//	prepareMediaPlayer(mPreparedMediaPlayer, nextSong.path);
+			//	//	mMediaPlayer.setNextMediaPlayer(mPreparedMediaPlayer);
+			//	//}
+			//	//if(mMediaPlayer.hasNextMediaPlayer() == false) {
+			//	//	// We can reuse the prepared MediaPlayer but the current instance lacks
+			//	//	// a link to it
+			//	//	mMediaPlayer.setNextMediaPlayer(mPreparedMediaPlayer);
+			//	//}
+			//} catch (IOException e) {
+			//	mMediaPlayer.setNextMediaPlayer(null);
+			//	//mPreparedMediaPlayer.reset();
+			//}
 		} else {
 			if(mMediaPlayer.hasNextMediaPlayer()) {
 				mMediaPlayer.setNextMediaPlayer(null);
@@ -1037,7 +1037,7 @@ public final class PlaybackService extends Service
 		if((toggled & FLAG_DUCKING) != 0) {
 			boolean isDucking = (state & FLAG_DUCKING) != 0;
 			mMediaPlayer.setIsDucking(isDucking);
-			mPreparedMediaPlayer.setIsDucking(isDucking);
+			//mPreparedMediaPlayer.setIsDucking(isDucking);
 		}
 	}
 

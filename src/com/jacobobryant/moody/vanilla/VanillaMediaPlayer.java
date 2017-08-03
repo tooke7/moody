@@ -30,6 +30,7 @@ import android.util.Log;
 import com.jacobobryant.moody.C;
 import com.spotify.sdk.android.player.Config;
 import com.spotify.sdk.android.player.ConnectionStateCallback;
+import com.spotify.sdk.android.player.PlaybackState;
 import com.spotify.sdk.android.player.Player;
 import com.spotify.sdk.android.player.PlayerEvent;
 import com.spotify.sdk.android.player.Spotify;
@@ -58,9 +59,12 @@ public class VanillaMediaPlayer extends MediaPlayer {
         public SpotPlayer(Context context) {
             SharedPreferences settings = PlaybackService.getSettings(context);
             String token = settings.getString(PrefKeys.SPOTIFY_TOKEN, null);
-            if (token == null) {
-                throw new RuntimeException("spotify token is null");
+            if (token != null) {
+                init(context, token);
             }
+        }
+
+        public void init(Context context, String token) {
             Config playerConfig = new Config(context, token, C.CLIENT_ID);
             Spotify.getPlayer(playerConfig, this, new SpotifyPlayer.InitializationObserver() {
                 @Override
@@ -82,23 +86,10 @@ public class VanillaMediaPlayer extends MediaPlayer {
             Log.d(C.TAG, "Playback event received: " + playerEvent.name());
             switch (playerEvent) {
                 // Handle event type as necessary
-                //case kSpPlaybackNotifyAudioDeliveryDone:
                 case kSpPlaybackNotifyTrackDelivered:
+                    Log.d(C.TAG, "calling onCompletion()");
                     mCompletionListener.onCompletion(VanillaMediaPlayer.this);
                     break;
-                //case kSpPlaybackNotifyMetadataChanged:
-                //    try {
-                //        Log.d(C.TAG, "timeline == null: " + (mTimeline == null));
-                //        Song s = mTimeline.getSong(0);
-                //        Metadata.Track mdata = mPlayer.getMetadata().currentTrack;
-                //        s.title = mdata.name;
-                //        s.album = mdata.albumName;
-                //        s.duration = mdata.durationMs;
-                //        Log.d(C.TAG, "set title: " + s.title);
-                //    } catch (NullPointerException e) { 
-                //        Log.e(C.TAG, "nullpointer", e);
-                //    }
-                //    break;
                 default:
                     break;
             }
@@ -141,7 +132,7 @@ public class VanillaMediaPlayer extends MediaPlayer {
 
         @Override
         public void onLoginFailed(com.spotify.sdk.android.player.Error i) {
-            Log.d(C.TAG, "Login failed");
+            Log.d(C.TAG, "Login failed: " + i);
         }
 
         @Override

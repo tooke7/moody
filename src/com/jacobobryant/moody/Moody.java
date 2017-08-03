@@ -228,6 +228,7 @@ public class Moody {
         }
         db.setTransactionSuccessful();
         db.endTransaction();
+        db.close();
     }
 
     private static String match_clause(Metadata s) {

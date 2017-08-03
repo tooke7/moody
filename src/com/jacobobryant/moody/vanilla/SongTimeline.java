@@ -670,7 +670,7 @@ public final class SongTimeline {
             Moody moody = Moody.getInstance(mContext);
             try {
                 moody.update(mSongs.get(mCurrentPos), skipped);
-            } catch (ArrayIndexOutOfBoundsException e) { 
+            } catch (IndexOutOfBoundsException e) {
                 Log.e(C.TAG, "couldn't call moody.update");
             }
             Metadata next;
@@ -686,6 +686,7 @@ public final class SongTimeline {
                 } else if (next.title.contains("spotify:track:")) {
                     try {
 						Song song = get_metadata(next.title);
+                        Log.d(C.TAG, "duration: " + song.duration);
                         //Song song = new Song(-1, Song.FLAG_NO_COVER);
                         //song.title = next.title;
                         //song.path = next.title;

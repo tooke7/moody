@@ -239,13 +239,18 @@ public class LibraryActivity
 		}
 
         // spotify stuff
-        AuthenticationRequest.Builder builder =
-                new AuthenticationRequest.Builder(C.CLIENT_ID,
-                AuthenticationResponse.Type.TOKEN, C.REDIRECT_URI);
-        builder.setScopes(new String[]{"user-read-private", "streaming",
-                "user-top-read"});
-        AuthenticationRequest request = builder.build();
-        AuthenticationClient.openLoginActivity(this, 666, request);
+        if (System.currentTimeMillis() / 1000 > settings.getLong(PrefKeys.SPOTIFY_TOKEN_EXPIRATION, 0)) {
+            Log.d(C.TAG, "refreshing spotify token");
+            AuthenticationRequest.Builder builder =
+                    new AuthenticationRequest.Builder(C.CLIENT_ID,
+                    AuthenticationResponse.Type.TOKEN, C.REDIRECT_URI);
+            builder.setScopes(new String[]{"user-read-private", "streaming",
+                    "user-top-read"});
+            AuthenticationRequest request = builder.build();
+            AuthenticationClient.openLoginActivity(this, 666, request);
+        } else {
+            Log.d(C.TAG, "spotify token is still valid");
+        }
 
         Log.d(C.TAG, "finished LibraryActivity.onCreate()");
 	}
@@ -256,11 +261,21 @@ public class LibraryActivity
         // Check if result comes from the correct activity
         if (requestCode == 666) {
             AuthenticationResponse response = AuthenticationClient.getResponse(resultCode, intent);
-            if (response.getType() == AuthenticationResponse.Type.TOKEN) {
-                Log.d(C.TAG, "spotify access token: " + response.getAccessToken());
-                SharedPreferences settings = PlaybackService.getSettings(this);
-                settings.edit().putString(PrefKeys.SPOTIFY_TOKEN,
-                        response.getAccessToken()).commit();
+            switch (response.getType()) {
+                case TOKEN:
+                    Log.d(C.TAG, "spotify access token: " + response.getAccessToken());
+                    SharedPreferences settings = PlaybackService.getSettings(this);
+                    settings.edit()
+                        .putString(PrefKeys.SPOTIFY_TOKEN, response.getAccessToken())
+                        .putLong(PrefKeys.SPOTIFY_TOKEN_EXPIRATION,
+                                response.getExpiresIn() + System.currentTimeMillis() / 1000)
+                        .commit();
+                    break;
+                case ERROR:
+                    Log.e(C.TAG, "Spotify auth error: " + response.getError());
+                    break;
+                default:
+                    break;
             }
         }
     }
