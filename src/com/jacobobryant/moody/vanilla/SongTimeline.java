@@ -632,40 +632,6 @@ public final class SongTimeline {
 	 */
 	private void shiftCurrentSongInternal(int delta, boolean skipped)
 	{
-        //Log.d("FOO", "shiftCurrentSongInternal");
-        //Log.d("FOO", "getPosition()=" + position);
-        //Log.d("FOO", "duration=" + mSongs.get(mCurrentPos).duration);
-        //long percent_done = 100 * position / mSongs.get(mCurrentPos).duration;
-        //Log.d("FOO", "percent_done=" + percent_done);
-
-        //if (position < 5000) {
-        //    Log.d("FOO", "playing bill nye");
-        //    QueryTask query = new QueryTask(MediaLibrary.VIEW_SONGS_ALBUMS_ARTISTS,
-        //            Song.FILLED_PLAYLIST_PROJECTION, "title=\"Bill Nye the Science Guy\"",
-        //            null, null);
-        //    //query.mode = MODE_FLUSH_AND_PLAY_NEXT;
-        //    query.mode = MODE_ENQUEUE_AS_NEXT;
-        //    addSongs(mContext, query);
-        //}
-        // get current play duration, decide if the song was skipped or listened.
-        // call addSongs with MODE_FLUSH_AND_PLAY_NEXT here hohoho
-
-
-        //if (delta == 1) {
-        //    QueryTask query = new QueryTask(MediaLibrary.VIEW_SONGS_ALBUMS_ARTISTS,
-        //            Song.FILLED_PLAYLIST_PROJECTION, "title=\"Bill Nye the Science Guy\"",
-        //            null, null);
-        //    //query.mode = MODE_FLUSH_AND_PLAY_NEXT;
-        //    query.mode = MODE_ENQUEUE_AS_NEXT;
-        //    addSongs(mContext, query);
-        //}
-
-        //if (false) {
-        //
-        //
-        //
-
-
         if (delta == 1) {
             Moody moody = Moody.getInstance(mContext);
             try {
@@ -687,10 +653,6 @@ public final class SongTimeline {
                     try {
 						Song song = get_metadata(next.title);
                         Log.d(C.TAG, "duration: " + song.duration);
-                        //Song song = new Song(-1, Song.FLAG_NO_COVER);
-                        //song.title = next.title;
-                        //song.path = next.title;
-                        //song.artist = next.artist;
 						int index = Math.min(mSongs.size(), mCurrentPos + 1);
 						mSongs.add(index, song);
 						break;
