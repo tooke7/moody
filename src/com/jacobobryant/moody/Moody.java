@@ -16,22 +16,28 @@ import com.jacobobryant.moody.vanilla.Song;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import reco.reco;
 
+import static android.database.Cursor.FIELD_TYPE_BLOB;
+import static android.database.Cursor.FIELD_TYPE_FLOAT;
+import static android.database.Cursor.FIELD_TYPE_INTEGER;
+import static android.database.Cursor.FIELD_TYPE_STRING;
+
 public class Moody {
     private static Moody instance;
     private Context context;
     private List<Metadata> songs;
-    private Metadata random_song;
     public static final String AUTHORITY = "com.jacobobryant.moody.vanilla";
     public static final String ACCOUNT_TYPE = "com.jacobobryant";
     public static final String ACCOUNT = "moodyaccount";
     private Account newAccount;
     public reco rec;
     public boolean next_on_blacklist = false;
+    private boolean was_random;
 
     private Moody() { }
 
@@ -87,22 +93,19 @@ public class Moody {
         result.close();
 
         // read in past skip data
-        result = db.rawQuery("SELECT artist, album, title, skipped, time " +
-                "FROM songs JOIN events ON songs._id = events.song_id " +
-                "ORDER BY time ASC", null);
+        result = db.rawQuery("SELECT song_id, skipped, time " +
+                "FROM events ORDER BY time ASC", null);
         result.moveToPosition(-1);
         while (result.moveToNext()) {
-            String artist = result.getString(0);
-            String album = result.getString(1);
-            String title = result.getString(2);
-            boolean skipped = (result.getInt(3) == 1);
-            String time = result.getString(4);
+            int song_id = result.getInt(0);
+            boolean skipped = (result.getInt(1) == 1);
+            String time = result.getString(2);
 
             try {
                 long seconds = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                     .parse(time).getTime() / 1000;
 
-                rec.add_event(artist, album, title, skipped, seconds);
+                rec.add_event(song_id, skipped, seconds);
             } catch (ParseException e) {
                 Log.e(C.TAG, "date couldn't be parsed");
             }
@@ -118,18 +121,6 @@ public class Moody {
             return;
         }
 
-        // get the current algorithm. 0 means random.
-        int algorithm;
-        if (random_song != null && random_song.same_as(new Metadata(last_song.artist,
-                    last_song.album, last_song.title))) {
-            algorithm = 0;
-            random_song = null;
-        } else {
-            algorithm = C.ALG_VERSION;
-        }
-        rec.add_event(last_song.artist, last_song.album,
-                last_song.title, skipped);
-
         // update db
         SQLiteDatabase db = new Database(context).getWritableDatabase();
         Metadata m = new Metadata(last_song);
@@ -138,9 +129,11 @@ public class Moody {
         if (result.getCount() > 0) {
             result.moveToPosition(0);
             int id = result.getInt(0);
+            int algorithm = (was_random) ? 0 : C.ALG_VERSION;
             db.execSQL("INSERT INTO events (song_id, skipped, algorithm) VALUES (?, ?, ?)",
                     new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
                     String.valueOf(algorithm)});
+            rec.add_event(id, skipped);
         } else {
             Log.e(C.TAG, "couldn't add song event");
         }
@@ -150,20 +143,10 @@ public class Moody {
 
     public Metadata pick_next(boolean local_only) {
         float CONTROL_PROB = 0.2f;
-
-        Map ret;
-        if (Math.random() < CONTROL_PROB) {
-            // suggest a random song every now and then for evaluation purposes.
-            ret = rec.pick_random(local_only);
-        } else {
-            ret = rec.pick_next(local_only);
-        }
-
-        if (ret == null) {
-            return null;
-        } else {
-            return new Metadata(ret);
-        }
+        was_random = Math.random() < CONTROL_PROB;
+        Map ret = (was_random) ? rec.pick_random(local_only) :
+                                 rec.pick_next(local_only);
+        return (ret == null) ? null : new Metadata(ret);
     }
 
     public static void add_to_library(Context c, List<Metadata> songs) {
@@ -178,7 +161,8 @@ public class Moody {
             if (count == 0) {
                 db.execSQL("INSERT INTO songs (artist, album, title, duration, source, spotify_id) " +
                         "VALUES (?, ?, ?, ?, ?, ?)",
-                        new String[] {s.artist, s.album, s.title, s.duration, s.source, s.spotify_id});
+                        new String[] {s.artist, s.album, s.title, String.valueOf(s.duration),
+                                s.source, s.spotify_id});
             }
         }
         db.setTransactionSuccessful();
@@ -207,15 +191,15 @@ public class Moody {
     }
 
 
-    public static cursor_to_maps(Cursor c) {
+    public static List<Map<String, Object>> cursor_to_maps(Cursor c) {
         List<Map<String, Object>> list = new ArrayList<>();
         int count = c.getColumnCount();
         c.moveToPosition(-1);
-        while (result.moveToNext()) {
+        while (c.moveToNext()) {
             Map<String, Object> m = new HashMap<>();
             for (int i = 0; i < count; i++) {
                 String key = c.getColumnName(i);
-                Object value;
+                Object value = null;
                 switch (c.getType(i)) {
                     case FIELD_TYPE_INTEGER:
                         value = c.getInt(i);

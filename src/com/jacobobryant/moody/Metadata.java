@@ -2,12 +2,12 @@ package com.jacobobryant.moody;
 
 import com.jacobobryant.moody.vanilla.Song;
 
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
 public class Metadata {
+    public Integer id;
     public Long duration;
     public String spotify_id;
     public String source;
@@ -32,6 +32,7 @@ public class Metadata {
 
     public Metadata(Map<String, Object> m) {
         this();
+        this.id = (Integer)m.get("_id");
         this.title = (String)m.get("title");
         this.artist = (String)m.get("artist");
         this.album = (String)m.get("album");
@@ -46,6 +47,16 @@ public class Metadata {
 
     public Metadata() { }
 
+    public Song toSong() {
+        Song s = new Song(-1);
+        s.path = spotify_id;
+        s.title = title;
+        s.artist = artist;
+        s.album = album;
+        s.duration = duration;
+        return s;
+    }
+
     public String[] query() {
         List<String> args = new LinkedList<>();
         for (String arg : new String[] { artist, album, title}) {
@@ -54,14 +65,5 @@ public class Metadata {
             }
         }
         return args.toArray(new String[args.size()]);
-    }
-
-
-    public Map<String, String> toMap() {
-        Map<String, String> foo = new HashMap<>();
-        foo.put("artist", artist);
-        foo.put("album", album);
-        foo.put("title", title);
-        return foo;
     }
 }

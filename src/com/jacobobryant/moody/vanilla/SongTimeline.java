@@ -647,11 +647,12 @@ public final class SongTimeline {
                 if (next == null) {
                     mSongs.clear();
                     mCurrentPos = 0;
-                    delta = 0;
                     return;
                 } else if (next.title.contains("spotify:track:")) {
                     try {
-						Song song = get_metadata(next.title);
+						//Song song = get_metadata(next.title);
+						get_metadata(next.title);
+						Song song = next.toSong();
                         Log.d(C.TAG, "duration: " + song.duration);
 						int index = Math.min(mSongs.size(), mCurrentPos + 1);
 						mSongs.add(index, song);
@@ -695,10 +696,9 @@ public final class SongTimeline {
                         break;
                     }
                     Log.e(C.TAG, "couldn't add song: " + next);
-                    moody.rec.add_to_blacklist(next.toMap());
+                    moody.rec.add_to_blacklist(next.id);
                 }
             } while (true);
-            //moody.reco.cache(next);
         }
 
 		int pos = mCurrentPos + delta;

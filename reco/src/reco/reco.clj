@@ -256,38 +256,45 @@
     :main
     :content))
 
-(defn pick-next [{candidates :candidates sessions :sessions
-                  blacklist :blacklist library :library} local-only]
+(defn pick-with-algorithm [cand-list]
+  (let [{main-choices :main content-choices :content} (group-by assign cand-list)
+        top-choices (map (fn [score-key choices]
+                           (if (empty? choices)
+                             nil
+                             (apply max-key score-key choices)))
+                         [:score :content-score] [main-choices content-choices])
+        song-id (:song-id ((if (< (rand) 0.6) first last)
+                           (remove nil? top-choices)))]
+    (println "choices:" (map :song-id top-choices))
+    song-id))
+
+(defn pick-randomly [cand-list]
+  (if (empty? cand-list)
+    nil
+    (rand-nth (keys cand-list))))
+
+(defn pick [{candidates :candidates sessions :sessions
+             blacklist :blacklist library :library} local-only song-picker]
   (let [cur-session (set (keys (first sessions)))
         cand-list (as-> candidates x 
-                    (difference x cur-session blacklist)
+                    (apply dissoc x (union cur-session blacklist))
                     (remove #(and local-only
                                   (= (get-in library [% :source]) "spotify")) x)
                     (map (fn [[k v]] (assoc v :song-id k)) x)
                     (shuffle x))
-        {main-choices :main content-choices :content} (group-by assign cand-list)
-        choices (map #(if (empty? %2) nil (apply max-key %1 %2))
-                     [:score :content-score] [main-choices content-choices])]
-    (println "choices:" (map :song-id choices))
-    (library (:song-id ((if (< (rand) 0.6) first last)
-                        (remove nil? choices))))))
+        song-id (song-picker cand-list)]
+    (if (nil? song-id)
+      nil
+      (walk/stringify-keys
+        (assoc (library song-id) :_id song-id)))))
 
 (defn -pick_next [this local-only]
   (when (not (:model @@this))
     (init-model this))
-  (pick-next @@this local-only))
+  (pick @@this local-only pick-with-algorithm))
 
 (defn -pick_random [this local-only]
-  (let [{candidates :candidates sessions :sessions
-         blacklist :blacklist library :library} @@this
-        cur-session (set (keys (first sessions)))
-        cand-list (remove #(and local-only
-                                (= (get-in library [% :source]) "spotify"))
-                          (difference (set (keys candidates))
-                                      cur-session blacklist))]
-    (if (empty? cand-list)
-      nil
-      (library (rand-nth (list cand-list))))))
+  (pick @@this local-only pick-randomly))
 
 (defn -deref [this]
   (.state this))
@@ -398,23 +405,16 @@
 ;  (let [db {:classname   "org.sqlite.JDBC"
 ;            :subprotocol "sqlite"
 ;            :subname     "moody.db"}
-;        library (map #(->> %
-;                           (filter (fn [[k v]] (not= k :_id)))
-;                           (map (fn [[k v]] [(name k) v]))
-;                           (into {}))
-;                     (jd/query db "select * from songs"))
+;        library (map walk/stringify-keys (jd/query db "select * from songs"))
 ;        rec (new reco.reco library)
 ;        parser (new java.text.SimpleDateFormat "yyyy-MM-dd HH:mm:ss")]
 ;
 ;    (println "adding events")
-;    (doseq [{timestamp :time title :title artist :artist album :album
-;             skipped :skipped}
-;            (jd/query db "select time, title, artist, album, skipped from songs s
-;                         join events e on s._id = e.song_id order by time asc")]
+;    (doseq [{song-id :song_id timestamp :time skipped :skipped}
+;            (jd/query db "select song_id, skipped, time from events
+;                         order by time asc")]
 ;      (let [seconds (quot (.getTime (.parse parser timestamp)) 1000)]
-;        (.add_event rec artist album title
-;                    (if (= skipped 1) true false) seconds)))
-;
+;        (.add_event rec song-id (if (= skipped 1) true false) seconds)))
 ;
 ;    (dbg "sessions length" (count (:sessions @@rec)))
 ;
@@ -424,17 +424,15 @@
 ;
 ;    (println "making recommendations")
 ;    ;(wait)
-;    (loop [next-song (.pick_next rec)
+;    (loop [next-song (.pick_next rec false)
 ;           actions [true true false true false false true true]]
-;           ;actions (repeat 500 true)]
-;      (let [{title "title" album "album" artist "artist"} next-song]
-;        (when (not (empty? actions))
-;          (pprint next-song)
-;          (println (if (first actions) "skip" "listen"))
-;          (println)
-;          (.add_event rec artist album title (first actions))
-;          (recur (.pick_next rec)
-;                 (rest actions)))))))
+;      ;actions (repeat 500 true)]
+;      (when (not (empty? actions))
+;        (pprint next-song)
+;        (println (if (first actions) "skip" "listen"))
+;        (println)
+;        (.add_event rec (next-song "_id") (first actions))
+;        (recur (.pick_next rec false) (rest actions))))))
 
 ;(defn -spotify_thang [token]
 ;  (let [;token "BQBgnAlhZiGA4TXPdKeFAr9iRq5bQ5vEPq3NPirb4bV01hIXh_FWeXrN1Kf3_JJWrLNZ1kwgfrDvmQBKIKmI3qfXv1sBCqqA5E833aCotbEl148SirYSUV-xFKypG9z5fhCHn2JqMkj2Ov-VOPgkW0opRBZH7UKP21Quef0qkowP5Lc"
