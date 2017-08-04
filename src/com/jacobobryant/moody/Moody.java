@@ -153,16 +153,19 @@ public class Moody {
         SQLiteDatabase db = new Database(c).getWritableDatabase();
         db.beginTransaction();
         for (Metadata s : songs) {
-            String query = "select count(*) from songs where " + match_clause(s);
+            String query = "select source from songs where " + match_clause(s);
             Cursor result = db.rawQuery(query, s.query());
 
             result.moveToFirst();
-            long count = result.getLong(0);
-            if (count == 0) {
+            if (result.getCount() == 0) {
                 db.execSQL("INSERT INTO songs (artist, album, title, duration, source, spotify_id) " +
                         "VALUES (?, ?, ?, ?, ?, ?)",
                         new String[] {s.artist, s.album, s.title, String.valueOf(s.duration),
                                 s.source, s.spotify_id});
+            } else if (s.source.equals("local") &&
+                       !result.getString(0).equals("local")) {
+                db.execSQL("UPDATE songs SET source = \"local\" WHERE " +
+                        match_clause(s));
             }
         }
         db.setTransactionSuccessful();
