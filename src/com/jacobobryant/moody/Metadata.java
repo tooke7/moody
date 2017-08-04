@@ -7,69 +7,46 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import static com.jacobobryant.moody.Metadata.Type.ALBUM;
-import static com.jacobobryant.moody.Metadata.Type.ARTIST;
-import static com.jacobobryant.moody.Metadata.Type.GLOBAL;
-import static com.jacobobryant.moody.Metadata.Type.SONG;
-
 public class Metadata {
+    public Long duration;
+    public String spotify_id;
+    public String source;
     public String title;
     public String album;
     public String artist;
-    public Type type;
+    public Double danceability;
+    public Double energy;
+    public Double mode;
+    public Double speechiness;
+    public Double acousticness;
+    public Double instrumentalness;
+    public Double liveness;
+    public Double valence;
 
-    public enum Type {
-        GLOBAL, ARTIST, ALBUM, SONG
-    }
 
     public Metadata(String artist, String album, String title) {
-        this.type = SONG;
         this.artist = artist;
         this.album = album;
         this.title = title;
     }
 
-    public Metadata(String artist, String album) {
-        this.type = ALBUM;
-        this.artist = artist;
-        this.album = album;
-    }
-
-    public Metadata(String artist) {
-        this.type = ARTIST;
-        this.artist = artist;
-    }
-
-    public Metadata(Map<String, String> m) {
-        this(m.get("artist"), m.get("album"), m.get("title"));
+    public Metadata(Map<String, Object> m) {
+        this();
+        this.title = (String)m.get("title");
+        this.artist = (String)m.get("artist");
+        this.album = (String)m.get("album");
+        this.duration = (Long)m.get("duration");
+        this.source = (String)m.get("source");
+        this.spotify_id = (String)m.get("spotify_id");
     }
 
     public Metadata(Song s) {
         this(s.artist, s.album, s.title);
     }
 
-    public Metadata() {
-        this.type = GLOBAL;
-    }
-
-    public Metadata pop() {
-        switch (type) {
-            case SONG:
-                return new Metadata(artist, album);
-            case ALBUM:
-                return new Metadata(artist);
-            case ARTIST:
-                return new Metadata();
-            default:
-                return null;
-        }
-    }
+    public Metadata() { }
 
     public String[] query() {
-        if (type != SONG) {
-            throw new RuntimeException("can't construct query: type=" + type);
-        }
-
         List<String> args = new LinkedList<>();
         for (String arg : new String[] { artist, album, title}) {
             if (arg != null) {
@@ -86,39 +63,5 @@ public class Metadata {
         foo.put("album", album);
         foo.put("title", title);
         return foo;
-    }
-
-    @Override
-    public String toString() {
-        return "Metadata{" +
-                "title='" + title + '\'' +
-                ", album='" + album + '\'' +
-                ", artist='" + artist + '\'' +
-                ", type=" + type +
-                '}';
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        Metadata metadata = (Metadata) o;
-
-        if (title != null ? !title.equals(metadata.title) : metadata.title != null) return false;
-        if (album != null ? !album.equals(metadata.album) : metadata.album != null) return false;
-        if (artist != null ? !artist.equals(metadata.artist) : metadata.artist != null)
-            return false;
-        return type == metadata.type;
-
-    }
-
-    @Override
-    public int hashCode() {
-        int result = title != null ? title.hashCode() : 0;
-        result = 31 * result + (album != null ? album.hashCode() : 0);
-        result = 31 * result + (artist != null ? artist.hashCode() : 0);
-        result = 31 * result + (type != null ? type.hashCode() : 0);
-        return result;
     }
 }

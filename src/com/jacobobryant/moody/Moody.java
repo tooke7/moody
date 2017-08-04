@@ -18,7 +18,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 import reco.reco;
 
@@ -65,7 +64,6 @@ public class Moody {
         final String[] proj = {MediaStore.Audio.Media.TITLE,
                                MediaStore.Audio.Media.ARTIST,
                                MediaStore.Audio.Media.ALBUM,
-                               MediaStore.Audio.Media.DURATION,
         };
         Cursor result = context.getContentResolver().query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, proj, null, null, null);
@@ -75,24 +73,18 @@ public class Moody {
             String title = result.getString(0);
             String artist = result.getString(1);
             String album = result.getString(2);
-            songs.add(new Metadata(artist, album, title));
+            Metadata m = new Metadata(artist, album, title);
+            m.source = "local";
+            songs.add(m);
         }
         add_to_library(context, songs);
         result.close();
 
         // get library
         SQLiteDatabase db = new Database(context).getReadableDatabase();
-        List<Map<String, String>> library = new ArrayList<>();
-        result = db.rawQuery("SELECT artist, album, title FROM songs", null);
-        result.moveToPosition(-1);
-        while (result.moveToNext()) {
-            String artist = result.getString(0);
-            String album  = result.getString(1);
-            String title  = result.getString(2);
-            library.add(new Metadata(artist, album, title).toMap());
-        }
+        result = db.rawQuery("SELECT * FROM songs", null);
+        rec = new reco(cursor_to_maps(result));
         result.close();
-        rec = new reco(library);
 
         // read in past skip data
         result = db.rawQuery("SELECT artist, album, title, skipped, time " +
@@ -119,18 +111,7 @@ public class Moody {
         db.close();
     }
 
-    public void update(Song last, boolean skipped) {
-        Song last_song = new Song(-1);
-        last_song.title = last.title;
-        last_song.album = last.album;
-        last_song.artist = last.artist;
-        last_song.path = last.path;
-
-        if (last_song.path.contains("spotify:track:")) {
-            last_song.title = last_song.path;
-            last_song.album = null;
-        }
-
+    public void update(Song last_song, boolean skipped) {
         if (next_on_blacklist) {
             //rec.add_to_blacklist(new Metadata(last_song).toMap());
             next_on_blacklist = false;
@@ -139,7 +120,7 @@ public class Moody {
 
         // get the current algorithm. 0 means random.
         int algorithm;
-        if (random_song != null && random_song.equals(new Metadata(last_song.artist,
+        if (random_song != null && random_song.same_as(new Metadata(last_song.artist,
                     last_song.album, last_song.title))) {
             algorithm = 0;
             random_song = null;
@@ -154,22 +135,15 @@ public class Moody {
         Metadata m = new Metadata(last_song);
         Cursor result = db.rawQuery("SELECT _id FROM songs WHERE "
                 + match_clause(m), m.query());
-        int id;
         if (result.getCount() > 0) {
             result.moveToPosition(0);
-            id = result.getInt(0);
+            int id = result.getInt(0);
+            db.execSQL("INSERT INTO events (song_id, skipped, algorithm) VALUES (?, ?, ?)",
+                    new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
+                    String.valueOf(algorithm)});
         } else {
-            db.execSQL("INSERT INTO songs (artist, album, title) " +
-                       "VALUES (?, ?, ?)",
-                    new String[] {last_song.artist, last_song.album, last_song.title});
-            Cursor idCursor = db.rawQuery("SELECT last_insert_rowid()", null);
-            idCursor.moveToPosition(0);
-            id = idCursor.getInt(0);
-            idCursor.close();
+            Log.e(C.TAG, "couldn't add song event");
         }
-        db.execSQL("INSERT INTO events (song_id, skipped, algorithm) VALUES (?, ?, ?)",
-                new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
-                String.valueOf(algorithm)});
         result.close();
         db.close();
     }
@@ -177,38 +151,19 @@ public class Moody {
     public Metadata pick_next(boolean local_only) {
         float CONTROL_PROB = 0.2f;
 
-        // suggest a random song every now and then for evaluation purposes.
+        Map ret;
         if (Math.random() < CONTROL_PROB) {
-            List<Metadata> universe = new ArrayList<>();
-            for (Metadata song : songs) {
-                if (!local_only || !song.title.startsWith("spotify:track:")) {
-                    universe.add(song);
-                }
-            }
-            if (universe.size() > 0) {
-                int item = new Random().nextInt(universe.size());
-                random_song = universe.get(item);
-                Log.d(C.TAG, "suggesting random song: " + random_song);
-                return random_song;
-            } else {
-                return null;
-            }
+            // suggest a random song every now and then for evaluation purposes.
+            ret = rec.pick_random(local_only);
         } else {
-            Map ret = rec.pick_next(local_only);
-            if (ret == null) {
-                return null;
-            } else {
-                return new Metadata(ret);
-            }
+            ret = rec.pick_next(local_only);
         }
-    }
 
-    private List<Map<String, String>> conv(List<Metadata> songs) {
-        List<Map<String, String>> ret = new ArrayList<>();
-        for (Metadata song : songs) {
-            ret.add(song.toMap());
+        if (ret == null) {
+            return null;
+        } else {
+            return new Metadata(ret);
         }
-        return ret;
     }
 
     public static void add_to_library(Context c, List<Metadata> songs) {
@@ -221,9 +176,9 @@ public class Moody {
             result.moveToFirst();
             long count = result.getLong(0);
             if (count == 0) {
-                db.execSQL("INSERT INTO songs (artist, album, title) " +
-                        "VALUES (?, ?, ?)",
-                        new String[] {s.artist, s.album, s.title});
+                db.execSQL("INSERT INTO songs (artist, album, title, duration, source, spotify_id) " +
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        new String[] {s.artist, s.album, s.title, s.duration, s.source, s.spotify_id});
             }
         }
         db.setTransactionSuccessful();
@@ -249,5 +204,36 @@ public class Moody {
             clause.append(" and title is null");
         }
         return clause.toString();
+    }
+
+
+    public static cursor_to_maps(Cursor c) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        int count = c.getColumnCount();
+        c.moveToPosition(-1);
+        while (result.moveToNext()) {
+            Map<String, Object> m = new HashMap<>();
+            for (int i = 0; i < count; i++) {
+                String key = c.getColumnName(i);
+                Object value;
+                switch (c.getType(i)) {
+                    case FIELD_TYPE_INTEGER:
+                        value = c.getInt(i);
+                        break;
+                    case FIELD_TYPE_FLOAT:
+                        value = c.getFloat(i);
+                        break;
+                    case FIELD_TYPE_STRING:
+                        value = c.getString(i);
+                        break;
+                    case FIELD_TYPE_BLOB:
+                        value = c.getBlob(i);
+                        break;
+                }
+                m.put(key, value);
+            }
+            list.add(m);
+        }
+        return list;
     }
 }

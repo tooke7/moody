@@ -250,6 +250,7 @@ public class LibraryActivity
             AuthenticationClient.openLoginActivity(this, 666, request);
         } else {
             Log.d(C.TAG, "spotify token is still valid");
+            Log.d(C.TAG, "token: " + settings.getString(PrefKeys.SPOTIFY_TOKEN, null));
         }
 
         Log.d(C.TAG, "finished LibraryActivity.onCreate()");

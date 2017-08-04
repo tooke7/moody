@@ -2,22 +2,23 @@
   (:gen-class
    :implements [clojure.lang.IDeref]
    :state state
-   :methods [[add_event [String, String, String, boolean, long] void]
-             [add_event [String, String, String, boolean] void]
+   :methods [[add_event [long boolean long] void]
+             [add_event [long boolean] void]
              [pick_next [boolean] java.util.Map]
-             [add_to_blacklist [java.util.Map] void]
+             [pick_random [boolean] java.util.Map]
+             [add_to_blacklist [long] void]
              ^:static [parse_spotify_response [String] java.util.List]
              ^:static [parse_track [String] java.util.Map]]
    :init init
    :constructors {[java.util.Collection] []})
   (:require [clojure.data.json :as json]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.walk :as walk]))
 
 (use '[clojure.set :only [intersection union difference]])
 (use '[clojure.math.combinatorics :only [combinations]])
 (use '[clojure.pprint :only [pprint]])
 ;(use '[clojure.java.jdbc :as jd])
-
 
 (def debug false)
 
@@ -39,6 +40,16 @@
                       ratio n score
                       content-ratio content-n content-score])
 
+(defrecord Song [artist album title source spotify_id
+                 danceability
+                 energy
+                 mode
+                 speechiness
+                 acousticness
+                 instrumentalness
+                 liveness
+                 valence])
+
 (defn dbg [desc arg]
   (when debug
     (print (str desc ": "))
@@ -49,39 +60,44 @@
   (quot (System/currentTimeMillis) 1000))
 
 (defn -init [raw-songs]
+  ; raw-songs - list of map
   ; into turns the java hashmap into a normal hashmap or something. Otherwise,
   ; the get-in call in mk-candidate always returns 0.
-  (let [songs (map #(into {} %) raw-songs)
-        candidates (repeat (count songs) (Candidate. [] 1 0 0 0 1 1 1))]
-    [[] (atom {:candidates (zipmap songs candidates)
+  (let [library (->> raw-songs
+                     (map walk/keywordize-keys)
+                     (map (fn [item] [(item :_id) (map->Song (dissoc item :_id))]))
+                     (into {}))
+        candidates (repeat (count library) (Candidate. [] 1 0 0 0 1 1 1))]
+    [[] (atom {:library library
+               :candidates (zipmap (keys library) candidates)
                :sessions '()
                :last-time 0
                :model nil
-               :blacklist []})]))
+               :blacklist #{}})]))
 
-(defn -add_to_blacklist [this song]
-  (println "adding to blacklist:" song)
+(defn -add_to_blacklist [this song-id]
+  (println "adding to blacklist:" song-id)
   (swap! (.state this)
          (fn [state]
-           (update state :blacklist #(conj % (into {} song))))))
+           (update state :blacklist #(conj % song-id)))))
 
-(defn ses-append [sessions mdata skipped create-session]
+(defn ses-append [sessions song-id skipped create-session]
   (if create-session
-    (cons {mdata skipped} sessions)
-    (if (contains? (first sessions) mdata)
+    (cons {song-id skipped} sessions)
+    (if (contains? (first sessions) song-id)
       sessions
-      (cons (assoc (first sessions) mdata skipped)
+      (cons (assoc (first sessions) song-id skipped)
             (rest sessions)))))
 
-(defn mini-model [session]
+(defn mini-model [library session]
   (->> (combinations (set (keys session)) 2)
-       (filter (fn [[a b]] (not= (session a) (session b) true)))
+       (remove (fn [[a b]] (= (session a) (session b) true)))
        (map (fn [[a b]]
               (let [score (if (= (session a) (session b) false) 1 0)]
                 [{(set [a b])
                   {:num score
                    :den 1}}
-                 {(set [(a "artist") (b "artist")])
+                 {(set (map #(get-in library [% :artist]) [a b]))
                   {:num score
                    :den 1}}])))))
 
@@ -94,8 +110,8 @@
                 1)
       :n (:den v)}])
 
-(defn mk-model [sessions]
-  (->> sessions (map mini-model) flatten
+(defn mk-model [sessions library]
+  (->> sessions (map #(mini-model library %)) flatten
        merge-models (map convert-cell) (into {})))
 
 (defn calc-margin [n]
@@ -121,23 +137,23 @@
       nil
       (* sim (if skipped -1 1)))))
 
-(defn update-cand [[candidate data] model mdata skipped]
-  [candidate
-   (let [sim (sim-score model mdata candidate skipped)
-         content-sim (sim-score model (mdata "artist")
-                                (candidate "artist") skipped)]
+(defn update-cand [[cand-id data] library model other-id skipped]
+  [cand-id
+   (let [sim (sim-score model other-id cand-id skipped)
+         content-sim (sim-score model (get-in library [other-id "artist"])
+                                (get-in library [cand-id "artist"])
+                                skipped)]
      (cond-> data
        sim (update-score :collaborative sim)
        content-sim (update-score :content content-sim)))])
 
 (defn update-candidates
-  ([state mdata skipped]
-   (let [{candidates :candidates model :model} state]
+  ([state song-id skipped]
+   (let [{candidates :candidates model :model library :library} state]
      (assoc state :candidates
-            (update-candidates candidates model mdata skipped))))
-  ([candidates model mdata skipped]
-   (into {} (map #(update-cand % model mdata skipped) candidates))))
-
+            (update-candidates candidates library model song-id skipped))))
+  ([candidates library model song-id skipped]
+   (into {} (map #(update-cand % library model song-id skipped) candidates))))
 
 (defn penalty [delta strength]
   ;(println delta strength)
@@ -156,7 +172,7 @@
 
 ;(def strength-set (map #(Math/pow (/ % 5) 2) (range 2 30)))
 (def strength-set [0.2 0.5 1 1.5 2 3 5 8 13 21])
-(defn calc-freshness [event-vec song]
+(defn calc-freshness [event-vec]
   ;(pprint (map :day event-vec))
   (let [get-deltas (fn [i event] {:observed (if (:skipped event) 0 1)
                                   :deltas (map #(- (:day event) (:day %))
@@ -164,20 +180,15 @@
         input-data (map-indexed get-deltas event-vec)
         strength (apply min-key #(total-error input-data %) strength-set)
         day (/ (now) 86400)
-        deltas (map (fn [e]
-                      ;(when (< day (:day e))
-                      ;  (println "WARNING: now is " day " but then was " (:day e)))
-                      (max (- day (:day e)) 0)) event-vec)]
-    ;(println "strength for " song ": " strength)
+        deltas (map (fn [e] (max (- day (:day e)) 0)) event-vec)]
     (predicted deltas strength)))
 
 (defn reset-candidates [candidates]
-  (into {} (map (fn [[song data]]
-                  [song
+  (into {} (map (fn [[song-id data]]
+                  [song-id
                    (assoc data
                           :freshness (calc-freshness
-                                       (sort-by :day (:event-vec data)) song)
-                                       ;(:event-vec data) song)
+                                       (sort-by :day (:event-vec data)))
                           :ratio 0
                           :n 0
                           :score 0
@@ -186,40 +197,33 @@
                           :content-score 1)])
                 candidates)))
 
-
-(defn internal-add-event
-  [this, mdata, skipped, timestamp]
-  (swap! (.state this)
-         (fn [state]
-           (let [time-delta (- timestamp (:last-time state))
-                 new-session (> time-delta ses-threshold)
-                 sessions (ses-append (:sessions state) mdata skipped new-session)
-                 new-model (when (and new-session (:model state))
-                             (mk-model (:sessions state)))]
-
-             (when (= new-session (= (count sessions)
-                                     (count (:sessions state))))
-               (println "WARNING: didn't create new session"))
-             (when (< timestamp (:last-time state))
-               (printf "WARNING: timestamp=%d but last-time=%d\n"
-                       timestamp (:last-time state)))
-
-             (cond-> state
-               true (assoc :last-time timestamp
-                           :sessions sessions)
-               true (update-in [:candidates mdata :event-vec]
-                               #(conj % (Event. (/ timestamp 86400) skipped)))
-               new-model (assoc :model new-model :candidates
-                                (reset-candidates (:candidates state)))
-               (:model state) (update-candidates mdata skipped))))))
-
 (defn -add_event
-  ([this, artist, album, title, skipped, timestamp]
-   (internal-add-event this {"artist" artist "album" album "title" title}
-               skipped timestamp))
-  ([this, artist, album, title, skipped]
-   (internal-add-event this {"artist" artist "album" album "title" title}
-               skipped (now))))
+  ([this song-id skipped timestamp]
+   (swap! (.state this)
+          (fn [state]
+            (let [time-delta (- timestamp (:last-time state))
+                  new-session (> time-delta ses-threshold)
+                  sessions (ses-append (:sessions state) song-id skipped new-session)
+                  new-model (when (and new-session (:model state))
+                              (mk-model (:sessions state) (:library state)))]
+
+              (when (= new-session (= (count sessions)
+                                      (count (:sessions state))))
+                (println "WARNING: didn't create new session"))
+              (when (< timestamp (:last-time state))
+                (printf "WARNING: timestamp=%d but last-time=%d\n"
+                        timestamp (:last-time state)))
+
+              (cond-> state
+                true (assoc :last-time timestamp
+                            :sessions sessions)
+                true (update-in [:candidates song-id :event-vec]
+                                #(conj % (Event. (/ timestamp 86400) skipped)))
+                new-model (assoc :model new-model :candidates
+                                 (reset-candidates (:candidates state)))
+                (:model state) (update-candidates song-id skipped))))))
+  ([this song-id skipped]
+   (.add_event this song-id skipped (now))))
 
 (defn init-model [this]
   (println "init model")
@@ -230,14 +234,15 @@
                    [(rest (:sessions state)) (first (:sessions state))]
                    [(:sessions state) nil])
 
-                 new-model (mk-model old-sessions)
+                 new-model (mk-model old-sessions (:library state))
                  new-candidates
                  (loop [cands (reset-candidates (:candidates state))
                         session cur-session]
                    (if (empty? session)
                      cands
-                     (let [[mdata skipped] (first session)]
-                       (recur (update-candidates cands new-model mdata skipped)
+                     (let [[song-id skipped] (first session)]
+                       (recur (update-candidates cands (:library state) new-model
+                                                 song-id skipped)
                               (rest session)))))]
              (assoc state :model new-model :candidates new-candidates)))))
 
@@ -252,29 +257,37 @@
     :content))
 
 (defn pick-next [{candidates :candidates sessions :sessions
-                  blacklist :blacklist} local-only]
+                  blacklist :blacklist library :library} local-only]
   (let [cur-session (set (keys (first sessions)))
         cand-list (as-> candidates x 
-                    (apply dissoc x cur-session)
-                    (apply dissoc x blacklist)
-                    (map (fn [[k v]] (assoc v :mdata k)) x)
+                    (difference x cur-session blacklist)
                     (remove #(and local-only
-                                  (str/starts-with? (get-in % [:mdata "title"])
-                                    "spotify:track:")) x)
+                                  (= (get-in library [% :source]) "spotify")) x)
+                    (map (fn [[k v]] (assoc v :song-id k)) x)
                     (shuffle x))
         {main-choices :main content-choices :content} (group-by assign cand-list)
         choices (map #(if (empty? %2) nil (apply max-key %1 %2))
                      [:score :content-score] [main-choices content-choices])]
-    (dbg "main-choices length" (count main-choices))
-    (dbg "content-choices length" (count content-choices))
-    (println "choices:" choices)
-    (:mdata ((if (< (rand) 0.6) first last)
-             (remove nil? choices)))))
+    (println "choices:" (map :song-id choices))
+    (library (:song-id ((if (< (rand) 0.6) first last)
+                        (remove nil? choices))))))
 
 (defn -pick_next [this local-only]
   (when (not (:model @@this))
     (init-model this))
   (pick-next @@this local-only))
+
+(defn -pick_random [this local-only]
+  (let [{candidates :candidates sessions :sessions
+         blacklist :blacklist library :library} @@this
+        cur-session (set (keys (first sessions)))
+        cand-list (remove #(and local-only
+                                (= (get-in library [% :source]) "spotify"))
+                          (difference (set (keys candidates))
+                                      cur-session blacklist))]
+    (if (empty? cand-list)
+      nil
+      (library (rand-nth (list cand-list))))))
 
 (defn -deref [this]
   (.state this))
@@ -432,9 +445,12 @@
 ;                             "artist" (get-in item ["artists" 0 "name"])})
 ;                 (data "items"))))
 
-(defn -parse_spotify_response [response]
+(defn -parse_top_tracks [response]
   (let [data (json/read-str response)]
     (map (fn [item] {"uri" (get item "uri")
+                     "duration" (get item "duration_ms")
+                     "title" (get item "name")
+                     "album" (get-in item ["album" "name"])
                      "artist" (get-in item ["artists" 0 "name"])})
          (data "items"))))
 
