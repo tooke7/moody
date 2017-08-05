@@ -236,23 +236,23 @@ public class LibraryActivity
 					//Moody.getInstance(LibraryActivity.this);
 		//		}
 		//	}.start();
-		}
 
-        // spotify stuff
-        if (Moody.spotify_token_expired(this)) {
-            Log.d(C.TAG, "refreshing spotify token");
-            AuthenticationRequest.Builder builder =
-                    new AuthenticationRequest.Builder(C.CLIENT_ID,
-                    AuthenticationResponse.Type.TOKEN, C.REDIRECT_URI);
-            builder.setScopes(new String[]{"user-read-private", "streaming",
-                    "user-top-read"});
-            AuthenticationRequest request = builder.build();
-            AuthenticationClient.openLoginActivity(this, 666, request);
-        } else {
-            Log.d(C.TAG, "spotify token is still valid");
-            Log.d(C.TAG, "token: " + settings.getString(PrefKeys.SPOTIFY_TOKEN, null));
-            Moody.getInstance(LibraryActivity.this);
-        }
+            // spotify stuff
+            if (Moody.spotify_token_expired(this)) {
+                Log.d(C.TAG, "refreshing spotify token");
+                AuthenticationRequest.Builder builder =
+                        new AuthenticationRequest.Builder(C.CLIENT_ID,
+                        AuthenticationResponse.Type.TOKEN, C.REDIRECT_URI);
+                builder.setScopes(new String[]{"user-read-private", "streaming",
+                        "user-top-read"});
+                AuthenticationRequest request = builder.build();
+                AuthenticationClient.openLoginActivity(this, 666, request);
+            } else {
+                Log.d(C.TAG, "spotify token is still valid");
+                Log.d(C.TAG, "token: " + settings.getString(PrefKeys.SPOTIFY_TOKEN, null));
+                Moody.getInstance(LibraryActivity.this);
+            }
+		}
 
         Log.d(C.TAG, "finished LibraryActivity.onCreate()");
 	}

@@ -36,7 +36,19 @@ public class Metadata {
         this.title = (String)m.get("title");
         this.artist = (String)m.get("artist");
         this.album = (String)m.get("album");
-        this.duration = (Long)m.get("duration");
+        try {
+            this.duration = new Long((Integer)m.get("duration"));
+        } catch (ClassCastException e) {
+            try {
+                this.duration = (Long)m.get("duration");
+            } catch (ClassCastException e2) {
+                try {
+                    this.duration = Long.parseLong((String)m.get("duration"));
+                } catch (Exception e3) {
+                    this.duration = 0L;
+                }
+            }
+        }
         this.source = (String)m.get("source");
         this.spotify_id = (String)m.get("spotify_id");
     }

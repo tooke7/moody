@@ -305,7 +305,9 @@ public class VanillaMediaPlayer extends MediaPlayer {
                 mSP.mPlayer.playUri(null, mDataSource, 0, 0);
             }
         } else {
-            mSP.mPlayer.pause(null);
+            if (mSP.mPlayer != null) {
+                mSP.mPlayer.pause(null);
+            }
             super.start();
         }
     }
@@ -345,6 +347,9 @@ public class VanillaMediaPlayer extends MediaPlayer {
     @Override
     public int getCurrentPosition() {
         if (isSpotifyTrack()) {
+            if (mSP.mPlayer == null) {
+                return 0;
+            }
             return (int)mSP.mPlayer.getPlaybackState().positionMs;
         } else {
             return super.getCurrentPosition();

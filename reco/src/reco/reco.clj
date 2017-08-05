@@ -22,7 +22,7 @@
 (use '[clojure.pprint :only [pprint]])
 ;(use '[clojure.java.jdbc :as jd])
 
-(def debug false)
+(def debug true)
 
 (def ses-threshold (* 20 60))
 
@@ -42,7 +42,7 @@
                       ratio n score
                       content-ratio content-n content-score])
 
-(defrecord Song [artist album title source spotify_id
+(defrecord Song [artist album title source spotify_id duration
                  danceability
                  energy
                  mode
@@ -141,12 +141,50 @@
       nil
       (* sim (if skipped -1 1)))))
 
+
+(defn dot-product [vectors]
+  (reduce + (apply map * vectors)))
+
+(defn norm [v]
+  (Math/sqrt (reduce + (map #(* % %) v))))
+
+(defn cosine [vectors]
+  (/ (dot-product vectors)
+     (apply * (map norm vectors))))
+
+(defn feature-sim [library a b skipped]
+  (let [features [:danceability
+                  :energy
+                  :mode
+                  :speechiness
+                  :acousticness
+                  :instrumentalness
+                  :liveness
+                  :valence]
+        vectors (map (fn [song-id]
+                       (map (fn [feature] (get-in library [song-id feature]))
+                            features))
+                     [a b])
+        distance (cosine vectors)
+        sim (- (* distance 2) 1)]
+    ;(println "feature distance between" (get-in library [a :title]) "and"
+    ;         (get-in library [b :title]) "is" distance)
+    (if (and skipped (< sim 0))
+      nil
+      (* sim (if skipped -1 1)))))
+
 (defn update-cand [[cand-id data] library model other-id skipped]
   [cand-id
    (let [sim (sim-score model other-id cand-id skipped)
-         content-sim (sim-score model (get-in library [other-id "artist"])
-                                (get-in library [cand-id "artist"])
-                                skipped)]
+         cand-artist (get-in library [cand-id :artist])
+         other-artist (get-in library [other-id :artist])
+         content-sim (if (every? some? (map #(get-in library [% :mode])
+                                            [cand-id other-id]))
+                       (feature-sim library cand-id other-id skipped)
+                       (let [s (sim-score model other-artist cand-artist skipped)]
+                         (if s
+                           (min s (if (= other-artist cand-artist) 1 0.8))
+                           nil)))]
      (cond-> data
        sim (update-score :collaborative sim)
        content-sim (update-score :content content-sim)))])
@@ -292,7 +330,7 @@
   (pick @@this local-only pick-with-algorithm))
 
 (defn -pick_random [this local-only]
-  (pick @@this local-only pick-randomly))
+  (dbg "pick" (pick @@this local-only pick-randomly)))
 
 (defn -deref [this]
   (.state this))

@@ -651,7 +651,7 @@ public final class SongTimeline {
                 } else if ("spotify".equals(next.source)) {
                     try {
 						//Song song = get_metadata(next.title);
-						get_metadata(next.title);
+						get_metadata(next.spotify_id);
 						Song song = next.toSong();
                         Log.d(C.TAG, "duration: " + song.duration);
 						int index = Math.min(mSongs.size(), mCurrentPos + 1);
