@@ -28,6 +28,7 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -75,7 +76,7 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
             syncDb(context);
             getSpotifySongs(context);
             getSpotifyIds(context);
-            //getSpotifyFeatures(context);
+            getSpotifyFeatures(context);
         } catch (Exception e) {
             //ACRA.getErrorReporter().handleException(e);
             Log.e(C.TAG, "couldn't finish sync stuff", e);
@@ -265,6 +266,71 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
             return null;
         }
     }
+
+    public void getSpotifyFeatures(Context context) throws IOException {
+        if (Moody.spotify_token_expired(context)) {
+            return;
+        }
+        SharedPreferences settings = PlaybackService.getSettings(context);
+        String token = settings.getString(PrefKeys.SPOTIFY_TOKEN, null);
+
+        SQLiteDatabase db = new Database(context).getReadableDatabase();
+        Cursor curs = db.rawQuery("select spotify_id from songs where " +
+                        "spotify_id like \"spotify%\"", null);
+        List<Map<String, Object>> result = Moody.cursor_to_maps(curs);
+        curs.close();
+        db.close();
+        int size = result.size();
+        for (int start = 0; start < size; start += 100) {
+            int end = Math.min(start + 100, size);
+            StringBuilder query = new StringBuilder(
+                    "https://api.spotify.com/v1/audio-features/?ids=");
+            for (int index = start; index < end; index++) {
+                if (index > start) {
+                    query.append(",");
+                }
+                String id = ((String)result.get(index).get("spotify_id"))
+                            .substring("spotify:track:".length());
+                query.append(id);
+            }
+            URL url;
+            try {
+                url = new URL(query.toString());
+            } catch (MalformedURLException e) {
+                Log.e(C.TAG, "couldn't form URL:", e);
+                continue;
+            }
+
+            List<Map<String, Double>> feature_response = reco.parse_features(
+                    query_spotify(url, token));
+
+            db = new Database(context).getWritableDatabase();
+            for (int index = start; index < end; index++) {
+                String id = (String)result.get(index).get("spotify_id");
+                Map<String, Double> features = feature_response.get(index - start);
+
+                StringBuilder sql = new StringBuilder("update songs set ");
+                List<String> args = new ArrayList<>();
+                boolean first = true;
+                for (Map.Entry<String, Double> feature : features.entrySet()) {
+                    if (!first) {
+                        sql.append(", ");
+                    } else {
+                        first = false;
+                    }
+                    sql.append(feature.getKey());
+                    sql.append("=?");
+                    args.add(String.valueOf(feature.getValue()));
+                }
+                sql.append(" where spotify_id=?");
+                args.add(id);
+                db.execSQL(sql.toString(), args.toArray());
+            }
+            db.close();
+        }
+        Log.d(C.TAG, "finished getSpotifyFeatures()");
+    }
+
 
     private static String getUserId(Context context) {
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(context);

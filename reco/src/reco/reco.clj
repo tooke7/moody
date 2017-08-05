@@ -9,6 +9,7 @@
              [add_to_blacklist [long] void]
              ^:static [parse_top_tracks [String] java.util.List]
              ^:static [parse_track [String] java.util.Map]
+             ^:static [parse_features [String] java.util.List]
              ^:static [parse_search [String] String]]
    :init init
    :constructors {[java.util.Collection] []})
@@ -311,6 +312,20 @@
      "artist" (get-in data ["artists" 0 "name"])
      "album" (get-in data ["album" "name"])
      "duration" (get data "duration_ms")}))
+
+(defn -parse_features [response]
+  (let [data (json/read-str response)
+        features ["danceability"
+                  "energy"
+                  "mode"
+                  "speechiness"
+                  "acousticness"
+                  "instrumentalness"
+                  "liveness"
+                  "valence"]]
+    (map (fn [item] (into {} (map (fn [k] [k (get item k)])
+                                  features)))
+         (data "audio_features"))))
 
 (defn -parse_search [response]
   (let [data (json/read-str response)]
