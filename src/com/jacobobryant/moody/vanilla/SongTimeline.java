@@ -648,7 +648,7 @@ public final class SongTimeline {
                     mSongs.clear();
                     mCurrentPos = 0;
                     return;
-                } else if (next.title.contains("spotify:track:")) {
+                } else if ("spotify".equals(next.source)) {
                     try {
 						//Song song = get_metadata(next.title);
 						get_metadata(next.title);

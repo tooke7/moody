@@ -8,7 +8,8 @@
              [pick_random [boolean] java.util.Map]
              [add_to_blacklist [long] void]
              ^:static [parse_top_tracks [String] java.util.List]
-             ^:static [parse_track [String] java.util.Map]]
+             ^:static [parse_track [String] java.util.Map]
+             ^:static [parse_search [String] String]]
    :init init
    :constructors {[java.util.Collection] []})
   (:require [clojure.data.json :as json]
@@ -18,7 +19,7 @@
 (use '[clojure.set :only [intersection union difference]])
 (use '[clojure.math.combinatorics :only [combinations]])
 (use '[clojure.pprint :only [pprint]])
-(use '[clojure.java.jdbc :as jd])
+;(use '[clojure.java.jdbc :as jd])
 
 (def debug false)
 
@@ -311,42 +312,44 @@
      "album" (get-in data ["album" "name"])
      "duration" (get data "duration_ms")}))
 
+(defn -parse_search [response]
+  (let [data (json/read-str response)]
+    (get-in data ["tracks" "items" 0 "uri"])))
 
 
-
-(defn demo-real-data []
-  (println "adding library")
-  (let [db {:classname   "org.sqlite.JDBC"
-            :subprotocol "sqlite"
-            :subname     "moody.db"}
-        library (map walk/stringify-keys (jd/query db "select * from songs"))
-        rec (new reco.reco library)
-        parser (new java.text.SimpleDateFormat "yyyy-MM-dd HH:mm:ss")]
-
-    (println "adding events")
-    (doseq [{song-id :song_id timestamp :time skipped :skipped}
-            (jd/query db "select song_id, skipped, time from events
-                         order by time asc")]
-      (let [seconds (quot (.getTime (.parse parser timestamp)) 1000)]
-        (.add_event rec song-id (if (= skipped 1) true false) seconds)))
-
-    (dbg "sessions length" (count (:sessions @@rec)))
-
-    (dbg "model length" (count (:model @@rec)))
-
-    (println "making recommendations")
-    (loop [next-song (.pick_next rec false)
-           actions [true true false true false false true true]]
-      ;actions (repeat 500 true)]
-      (when (not (empty? actions))
-        (pprint next-song)
-        (println (if (first actions) "skip" "listen"))
-        (println)
-        (.add_event rec (next-song "_id") (first actions))
-        (recur (.pick_next rec false) (rest actions))))
-    (.pick_random rec false)))
+;(defn demo-real-data []
+;  (println "adding library")
+;  (let [db {:classname   "org.sqlite.JDBC"
+;            :subprotocol "sqlite"
+;            :subname     "moody.db"}
+;        library (map walk/stringify-keys (jd/query db "select * from songs"))
+;        rec (new reco.reco library)
+;        parser (new java.text.SimpleDateFormat "yyyy-MM-dd HH:mm:ss")]
+;
+;    (println "adding events")
+;    (doseq [{song-id :song_id timestamp :time skipped :skipped}
+;            (jd/query db "select song_id, skipped, time from events
+;                         order by time asc")]
+;      (let [seconds (quot (.getTime (.parse parser timestamp)) 1000)]
+;        (.add_event rec song-id (if (= skipped 1) true false) seconds)))
+;
+;    (dbg "sessions length" (count (:sessions @@rec)))
+;
+;    (dbg "model length" (count (:model @@rec)))
+;
+;    (println "making recommendations")
+;    (loop [next-song (.pick_next rec false)
+;           actions [true true false true false false true true]]
+;      ;actions (repeat 500 true)]
+;      (when (not (empty? actions))
+;        (pprint next-song)
+;        (println (if (first actions) "skip" "listen"))
+;        (println)
+;        (.add_event rec (next-song "_id") (first actions))
+;        (recur (.pick_next rec false) (rest actions))))
+;    (.pick_random rec false)))
 
 (defn -main [& args]
   (println "starting up")
-  (demo-real-data)
+  ;(demo-real-data)
   (println "all tests pass"))

@@ -239,7 +239,7 @@ public class LibraryActivity
 		}
 
         // spotify stuff
-        if (System.currentTimeMillis() / 1000 > settings.getLong(PrefKeys.SPOTIFY_TOKEN_EXPIRATION, 0)) {
+        if (Moody.spotify_token_expired(this)) {
             Log.d(C.TAG, "refreshing spotify token");
             AuthenticationRequest.Builder builder =
                     new AuthenticationRequest.Builder(C.CLIENT_ID,

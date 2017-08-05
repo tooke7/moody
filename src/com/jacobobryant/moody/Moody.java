@@ -4,6 +4,7 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
@@ -11,6 +12,8 @@ import android.provider.MediaStore;
 import android.util.Log;
 
 import com.jacobobryant.moody.vanilla.BuildConfig;
+import com.jacobobryant.moody.vanilla.PlaybackService;
+import com.jacobobryant.moody.vanilla.PrefKeys;
 import com.jacobobryant.moody.vanilla.Song;
 
 import java.text.ParseException;
@@ -162,8 +165,8 @@ public class Moody {
                         "VALUES (?, ?, ?, ?, ?, ?)",
                         new String[] {s.artist, s.album, s.title, String.valueOf(s.duration),
                                 s.source, s.spotify_id});
-            } else if (new String("local").equals(s.source) &&
-                        !(new String("local").equals(result.getString(1)))) {
+            } else if ("local".equals(s.source) &&
+                        !("local".equals(result.getString(1)))) {
                 query = "UPDATE songs SET source = \"local\" WHERE _id = ?";
                 db.execSQL(query, new String[] {String.valueOf(result.getInt(0))});
             }
@@ -222,5 +225,11 @@ public class Moody {
             list.add(m);
         }
         return list;
+    }
+
+    public static boolean spotify_token_expired(Context context) {
+		SharedPreferences settings = PlaybackService.getSettings(context);
+        return System.currentTimeMillis() / 1000 >
+            settings.getLong(PrefKeys.SPOTIFY_TOKEN_EXPIRATION, 0);
     }
 }
