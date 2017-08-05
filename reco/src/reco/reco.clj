@@ -7,7 +7,7 @@
              [pick_next [boolean] java.util.Map]
              [pick_random [boolean] java.util.Map]
              [add_to_blacklist [long] void]
-             ^:static [parse_spotify_response [String] java.util.List]
+             ^:static [parse_top_tracks [String] java.util.List]
              ^:static [parse_track [String] java.util.Map]]
    :init init
    :constructors {[java.util.Collection] []})
@@ -18,7 +18,7 @@
 (use '[clojure.set :only [intersection union difference]])
 (use '[clojure.math.combinatorics :only [combinations]])
 (use '[clojure.pprint :only [pprint]])
-;(use '[clojure.java.jdbc :as jd])
+(use '[clojure.java.jdbc :as jd])
 
 (def debug false)
 
@@ -64,8 +64,10 @@
   ; into turns the java hashmap into a normal hashmap or something. Otherwise,
   ; the get-in call in mk-candidate always returns 0.
   (let [library (->> raw-songs
+                     (map #(into {} %))
                      (map walk/keywordize-keys)
-                     (map (fn [item] [(item :_id) (map->Song (dissoc item :_id))]))
+                     (map (fn [item] [(item :_id)
+                                      (map->Song (dissoc item :_id))]))
                      (into {}))
         candidates (repeat (count library) (Candidate. [] 1 0 0 0 1 1 1))]
     [[] (atom {:library library
@@ -156,24 +158,19 @@
    (into {} (map #(update-cand % library model song-id skipped) candidates))))
 
 (defn penalty [delta strength]
-  ;(println delta strength)
   (let [ret (- 1 (/ 1 (Math/exp (/ delta strength))))]
-    ;(assert (<= 0 ret 1))
     ret))
 
 (defn predicted [deltas strength]
   (let [ret (reduce * (map #(penalty % strength) deltas))]
-    ;(assert (<= 0 ret 1))
     ret))
 
 (defn total-error [input-data strength]
   (reduce + (map #(Math/pow (- (predicted (:deltas %) strength)
                                (:observed %)) 2) input-data)))
 
-;(def strength-set (map #(Math/pow (/ % 5) 2) (range 2 30)))
 (def strength-set [0.2 0.5 1 1.5 2 3 5 8 13 21])
 (defn calc-freshness [event-vec]
-  ;(pprint (map :day event-vec))
   (let [get-deltas (fn [i event] {:observed (if (:skipped event) 0 1)
                                   :deltas (map #(- (:day event) (:day %))
                                                (take i event-vec))})
@@ -251,7 +248,6 @@
 (def calc-confidence (memoize calc-confidence))
 
 (defn assign [candidate]
-  ;(if (< (rand) (calc-confidence (:n candidate)))
   (if (< 0 (:n candidate))
     :main
     :content))
@@ -271,7 +267,7 @@
 (defn pick-randomly [cand-list]
   (if (empty? cand-list)
     nil
-    (rand-nth (keys cand-list))))
+    (:song-id (rand-nth cand-list))))
 
 (defn pick [{candidates :candidates sessions :sessions
              blacklist :blacklist library :library} local-only song-picker]
@@ -299,153 +295,9 @@
 (defn -deref [this]
   (.state this))
 
-(defn test= [actual expected]
-  (when (not= actual expected)
-    (print "expected: ")
-    (pprint expected)
-    (print "got: ")
-    (pprint actual)
-    (throw (new AssertionError "Test failed"))))
-
-(defn test-mini-model []
-  (assert (= (mini-model {a false
-                          b false
-                          c false
-                          d true})
-             '({#{{"artist" "c", "album" "c", "title" "c"}
-                  {"artist" "a", "album" "a", "title" "a"}}
-                {:num 1, :den 1}}
-               {#{"a" "c"} {:num 1, :den 1}}
-               {#{{"artist" "c", "album" "c", "title" "c"}
-                  {"artist" "d", "album" "d", "title" "d"}}
-                {:num 0, :den 1}}
-               {#{"d" "c"} {:num 0, :den 1}}
-               {#{{"artist" "c", "album" "c", "title" "c"}
-                  {"artist" "b", "album" "b", "title" "b"}}
-                {:num 1, :den 1}}
-               {#{"b" "c"} {:num 1, :den 1}}
-               {#{{"artist" "a", "album" "a", "title" "a"}
-                  {"artist" "d", "album" "d", "title" "d"}}
-                {:num 0, :den 1}}
-               {#{"d" "a"} {:num 0, :den 1}}
-               {#{{"artist" "a", "album" "a", "title" "a"}
-                  {"artist" "b", "album" "b", "title" "b"}}
-                {:num 1, :den 1}}
-               {#{"a" "b"} {:num 1, :den 1}}
-               {#{{"artist" "d", "album" "d", "title" "d"}
-                  {"artist" "b", "album" "b", "title" "b"}}
-                {:num 0, :den 1}}
-               {#{"d" "b"} {:num 0, :den 1}}))))
-
-(defn test-model []
-  (let [rec (new reco.reco [a b c d e f g h])]
-    (.add_event rec "a" "a" "a" true 2000)
-    (.add_event rec "b" "b" "b" false 2000)
-    (.add_event rec "c" "c" "c" false 2000)
-
-    (.add_event rec "a" "a" "a" false 4000)
-    (.add_event rec "b" "b" "b" false 4000)
-
-    ;(.update_model rec)
-
-    (assert (= (:sessions @@rec)
-               '({{"artist" "a", "album" "a", "title" "a"} false,
-                  {"artist" "b", "album" "b", "title" "b"} false}
-                 {{"artist" "a", "album" "a", "title" "a"} true,
-                  {"artist" "b", "album" "b", "title" "b"} false,
-                  {"artist" "c", "album" "c", "title" "c"} false})))
-    (assert (= (:model @@rec)
-               {#{{"artist" "a", "album" "a", "title" "a"}
-                  {"artist" "b", "album" "b", "title" "b"}}
-                {:score 0N, :n 2},
-                #{"a" "b"} {:score 0N, :n 2},
-                #{{"artist" "c", "album" "c", "title" "c"}
-                  {"artist" "a", "album" "a", "title" "a"}}
-                {:score -1, :n 1},
-                #{"a" "c"} {:score -1, :n 1},
-                #{{"artist" "c", "album" "c", "title" "c"}
-                  {"artist" "b", "album" "b", "title" "b"}}
-                {:score 1, :n 1},
-                #{"b" "c"} {:score 1, :n 1}}))
-    (assert (= (:freshness @@rec)
-               {{"artist" "b", "album" "b", "title" "b"} 4000,
-                {"artist" "c", "album" "c", "title" "c"} 2000,
-                {"artist" "a", "album" "a", "title" "a"} 4000}))))
-
-(defn test-pick-next [artist-frequency skip-sequence next-artist]
-  (let [library (for [[artist n] artist-frequency
-                      title (range n)]
-                  {"artist" artist "album" artist "title" title})
-        rec (new reco.reco library)]
-    ;(.update_model rec)
-    (doseq [action skip-sequence]
-      (.add_event rec (.pick_next rec) action (now)))
-    (test=
-      ((.pick_next rec) "artist")
-      next-artist)))
-
-(defn demo-pick-next [artist-frequency skip-sequence]
-  (let [library (for [[artist n] artist-frequency
-                      title (range n)]
-                  {"artist" artist "album" artist "title" title})
-        rec (new reco.reco library)]
-    ;(.update_model rec)
-    (doseq [action skip-sequence]
-      (let [n (.pick_next rec)]
-        (.add_event rec n action (now))))
-    (pprint (:candidates @@rec))))
-
-(defn wait []
-  (print "Press Enter to continue")
-  (flush)
-  (read-line))
-
-;(defn demo-real-data []
-;  (println "adding library")
-;  (let [db {:classname   "org.sqlite.JDBC"
-;            :subprotocol "sqlite"
-;            :subname     "moody.db"}
-;        library (map walk/stringify-keys (jd/query db "select * from songs"))
-;        rec (new reco.reco library)
-;        parser (new java.text.SimpleDateFormat "yyyy-MM-dd HH:mm:ss")]
-;
-;    (println "adding events")
-;    (doseq [{song-id :song_id timestamp :time skipped :skipped}
-;            (jd/query db "select song_id, skipped, time from events
-;                         order by time asc")]
-;      (let [seconds (quot (.getTime (.parse parser timestamp)) 1000)]
-;        (.add_event rec song-id (if (= skipped 1) true false) seconds)))
-;
-;    (dbg "sessions length" (count (:sessions @@rec)))
-;
-;    ;(println "updating model")
-;    ;(.update_model rec)
-;    (dbg "model length" (count (:model @@rec)))
-;
-;    (println "making recommendations")
-;    ;(wait)
-;    (loop [next-song (.pick_next rec false)
-;           actions [true true false true false false true true]]
-;      ;actions (repeat 500 true)]
-;      (when (not (empty? actions))
-;        (pprint next-song)
-;        (println (if (first actions) "skip" "listen"))
-;        (println)
-;        (.add_event rec (next-song "_id") (first actions))
-;        (recur (.pick_next rec false) (rest actions))))))
-
-;(defn -spotify_thang [token]
-;  (let [;token "BQBgnAlhZiGA4TXPdKeFAr9iRq5bQ5vEPq3NPirb4bV01hIXh_FWeXrN1Kf3_JJWrLNZ1kwgfrDvmQBKIKmI3qfXv1sBCqqA5E833aCotbEl148SirYSUV-xFKypG9z5fhCHn2JqMkj2Ov-VOPgkW0opRBZH7UKP21Quef0qkowP5Lc"
-;        response (client/get "https://api.spotify.com/v1/me/top/tracks?limit=50"
-;                             {:headers {:Authorization (str "Bearer " token)}})
-;        data (json/read-str (:body response))]
-;    (map (fn [item] {"uri" (get item "uri")
-;                             "artist" (get-in item ["artists" 0 "name"])})
-;                 (data "items"))))
-
 (defn -parse_top_tracks [response]
   (let [data (json/read-str response)]
-    (map (fn [item] {"uri" (get item "uri")
+    (map (fn [item] {"spotify_id" (get item "uri")
                      "duration" (get item "duration_ms")
                      "title" (get item "name")
                      "album" (get-in item ["album" "name"])
@@ -459,20 +311,42 @@
      "album" (get-in data ["album" "name"])
      "duration" (get data "duration_ms")}))
 
+
+
+
+(defn demo-real-data []
+  (println "adding library")
+  (let [db {:classname   "org.sqlite.JDBC"
+            :subprotocol "sqlite"
+            :subname     "moody.db"}
+        library (map walk/stringify-keys (jd/query db "select * from songs"))
+        rec (new reco.reco library)
+        parser (new java.text.SimpleDateFormat "yyyy-MM-dd HH:mm:ss")]
+
+    (println "adding events")
+    (doseq [{song-id :song_id timestamp :time skipped :skipped}
+            (jd/query db "select song_id, skipped, time from events
+                         order by time asc")]
+      (let [seconds (quot (.getTime (.parse parser timestamp)) 1000)]
+        (.add_event rec song-id (if (= skipped 1) true false) seconds)))
+
+    (dbg "sessions length" (count (:sessions @@rec)))
+
+    (dbg "model length" (count (:model @@rec)))
+
+    (println "making recommendations")
+    (loop [next-song (.pick_next rec false)
+           actions [true true false true false false true true]]
+      ;actions (repeat 500 true)]
+      (when (not (empty? actions))
+        (pprint next-song)
+        (println (if (first actions) "skip" "listen"))
+        (println)
+        (.add_event rec (next-song "_id") (first actions))
+        (recur (.pick_next rec false) (rest actions))))
+    (.pick_random rec false)))
+
 (defn -main [& args]
   (println "starting up")
-  ;(test-mini-model)
-  ;(test-get-sim-score)
-  ;(test-get-content-mean)
-  ;(test-mk-candidate)
-  ;(test-model)
-  ;(test-pick-next [["a" 5] ["b" 10] ["c" 7]] nil "b")
-  ;(test-pick-next [["a" 2] ["b" 1]] [true] "b")
-  ;(test-pick-next [["a" 3] ["b" 1]] [false false] "b")
-
-  ;(demo-pick-next [["a" 2] ["b" 1]] [true])
-  ;(demo-pick-next [["a" 2] ["b" 1]] [false])
-  ;(demo-real-data)
-  ;(spotify-thang)
-  ;(reco.reco/spotify_thang "BQBgnAlhZiGA4TXPdKeFAr9iRq5bQ5vEPq3NPirb4bV01hIXh_FWeXrN1Kf3_JJWrLNZ1kwgfrDvmQBKIKmI3qfXv1sBCqqA5E833aCotbEl148SirYSUV-xFKypG9z5fhCHn2JqMkj2Ov-VOPgkW0opRBZH7UKP21Quef0qkowP5Lc")
+  (demo-real-data)
   (println "all tests pass"))

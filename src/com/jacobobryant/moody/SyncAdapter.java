@@ -142,13 +142,11 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         in.close();
 
         List<Metadata> songs = new LinkedList<>();
-        for (Map<String, String> song : (List<Map<String, String>>)
+        for (Map<String, Object> song : (List<Map<String, Object>>)
                 reco.parse_top_tracks(response.toString())) {
-            String uri = song.get("uri");
-            String artist = song.get("artist");
-            Log.d(C.TAG, "adding spotify uri " + uri + " by " + artist);
-            song.put("source", "spotify");
-            songs.add(new Metadata(song));
+            Metadata m = new Metadata(song);
+            m.source = "spotify";
+            songs.add(m);
         }
         Moody.add_to_library(context, songs);
         Log.d(C.TAG, "finished spotify thang");

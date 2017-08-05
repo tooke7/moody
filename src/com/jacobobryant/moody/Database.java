@@ -18,6 +18,7 @@ public class Database extends SQLiteOpenHelper {
                    "title            TEXT, " +
                    "artist           TEXT, " +
                    "album            TEXT, " +
+                   "duration         INTEGER, " +
                    "source           TEXT, " +
                    "spotify_id       TEXT, " +
                    "danceability     REAL, " +
