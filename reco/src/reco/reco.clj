@@ -20,7 +20,7 @@
 (use '[clojure.set :only [intersection union difference]])
 (use '[clojure.math.combinatorics :only [combinations]])
 (use '[clojure.pprint :only [pprint]])
-;(use '[clojure.java.jdbc :as jd])
+(use '[clojure.java.jdbc :as jd])
 
 (def debug true)
 
@@ -95,26 +95,25 @@
       (cons (assoc (first sessions) song-id skipped)
             (rest sessions)))))
 
+(defrecord Frac [num den])
 (defn mini-model [library session]
   (->> (combinations (set (keys session)) 2)
        (remove (fn [[a b]] (= (session a) (session b) true)))
        (map (fn [[a b]]
               (let [score (if (= (session a) (session b) false) 1 0)]
-                [{(set [a b])
-                  {:num score
-                   :den 1}}
+                [{(set [a b]) (Frac. score 1)}
                  {(set (map #(get-in library [% :artist]) [a b]))
-                  {:num score
-                   :den 1}}])))))
+                  (Frac. score 1)}])))))
 
 (defn merge-models [models]
   (apply merge-with #(merge-with + %1 %2) models))
 
-(defn convert-cell [[k v]]
+(defrecord Cell [score n])
+(defn convert-cell [[song-pair frac]]
   ; take out max?
-  [k {:score (- (* 2 (/ (:num v) (max 1 (:den v))))
-                1)
-      :n (:den v)}])
+  [song-pair (Cell.
+               (- (* 2 (/ (:num frac) (max 1 (:den frac)))) 1)
+               (:den frac))])
 
 (defn mk-model [sessions library]
   (->> sessions (map #(mini-model library %)) flatten
@@ -236,15 +235,25 @@
                           :content-score 1)])
                 candidates)))
 
+(defn update-model [model session library]
+  (let [partial-model (mk-model [session] library)]
+    (merge-with (fn [{score-a :score n-a :n} {score-b :score n-b :n}]
+                  (Cell. (/ (+ (* score-a n-a) (* score-b n-b))
+                            (+ n-a n-b))
+                         (+ n-a n-b)))
+                model partial-model)))
+
 (defn -add_event
   ([this song-id skipped timestamp]
    (swap! (.state this)
           (fn [state]
             (let [time-delta (- timestamp (:last-time state))
                   new-session (> time-delta ses-threshold)
-                  sessions (ses-append (:sessions state) song-id skipped new-session)
-                  new-model (when (and new-session (:model state))
-                              (mk-model (:sessions state) (:library state)))]
+                  sessions (ses-append (:sessions state) song-id
+                                       skipped new-session)
+                  new-model (when new-session
+                              (update-model (:model state) (first (:sessions state))
+                                            (:library state)))]
 
               (when (= new-session (= (count sessions)
                                       (count (:sessions state))))
@@ -260,30 +269,30 @@
                                 #(conj % (Event. (/ timestamp 86400) skipped)))
                 new-model (assoc :model new-model :candidates
                                  (reset-candidates (:candidates state)))
-                (:model state) (update-candidates song-id skipped))))))
+                true (update-candidates song-id skipped))))))
   ([this song-id skipped]
    (.add_event this song-id skipped (now))))
 
-(defn init-model [this]
-  (println "init model")
-  (swap! (.state this)
-         (fn [state]
-           (let [[old-sessions cur-session]
-                 (if (> ses-threshold (- (now) (:last-time state)))
-                   [(rest (:sessions state)) (first (:sessions state))]
-                   [(:sessions state) nil])
-
-                 new-model (mk-model old-sessions (:library state))
-                 new-candidates
-                 (loop [cands (reset-candidates (:candidates state))
-                        session cur-session]
-                   (if (empty? session)
-                     cands
-                     (let [[song-id skipped] (first session)]
-                       (recur (update-candidates cands (:library state) new-model
-                                                 song-id skipped)
-                              (rest session)))))]
-             (assoc state :model new-model :candidates new-candidates)))))
+;(defn init-model [this]
+;  (println "init model")
+;  (swap! (.state this)
+;         (fn [state]
+;           (let [[old-sessions cur-session]
+;                 (if (> ses-threshold (- (now) (:last-time state)))
+;                   [(rest (:sessions state)) (first (:sessions state))]
+;                   [(:sessions state) nil])
+;
+;                 new-model (mk-model old-sessions (:library state))
+;                 new-candidates
+;                 (loop [cands (reset-candidates (:candidates state))
+;                        session cur-session]
+;                   (if (empty? session)
+;                     cands
+;                     (let [[song-id skipped] (first session)]
+;                       (recur (update-candidates cands (:library state) new-model
+;                                                 song-id skipped)
+;                              (rest session)))))]
+;             (assoc state :model new-model :candidates new-candidates)))))
 
 (defn calc-confidence [n]
   (- 1 (/ 1 (Math/pow 1.5 n))))
@@ -327,8 +336,8 @@
         (assoc (library song-id) :_id song-id)))))
 
 (defn -pick_next [this local-only]
-  (when (not (:model @@this))
-    (init-model this))
+  ;(when (not (:model @@this))
+  ;  (init-model this))
   (pick @@this local-only pick-with-algorithm))
 
 (defn -pick_random [this local-only]
@@ -372,39 +381,41 @@
     (get-in data ["tracks" "items" 0 "uri"])))
 
 
-;(defn demo-real-data []
-;  (println "adding library")
-;  (let [db {:classname   "org.sqlite.JDBC"
-;            :subprotocol "sqlite"
-;            :subname     "moody.db"}
-;        library (map walk/stringify-keys (jd/query db "select * from songs"))
-;        rec (new reco.reco library)
-;        parser (new java.text.SimpleDateFormat "yyyy-MM-dd HH:mm:ss")]
-;
-;    (println "adding events")
-;    (doseq [{song-id :song_id timestamp :time skipped :skipped}
-;            (jd/query db "select song_id, skipped, time from events
-;                         order by time asc")]
-;      (let [seconds (quot (.getTime (.parse parser timestamp)) 1000)]
-;        (.add_event rec song-id (if (= skipped 1) true false) seconds)))
-;
-;    (dbg "sessions length" (count (:sessions @@rec)))
-;
-;    (dbg "model length" (count (:model @@rec)))
-;
-;    (println "making recommendations")
-;    (loop [next-song (.pick_next rec false)
-;           actions [true true false true false false true true]]
-;      ;actions (repeat 500 true)]
-;      (when (not (empty? actions))
-;        (pprint next-song)
-;        (println (if (first actions) "skip" "listen"))
-;        (println)
-;        (.add_event rec (next-song "_id") (first actions))
-;        (recur (.pick_next rec false) (rest actions))))
-;    (.pick_random rec false)))
+(defn demo-real-data []
+  (println "Press Enter to start demo")
+  (read-line)
+
+  (println "adding library")
+  (let [db {:classname   "org.sqlite.JDBC"
+            :subprotocol "sqlite"
+            :subname     "moody.db"}
+        library (map walk/stringify-keys (jd/query db "select * from songs"))
+        rec (new reco.reco library)
+        parser (new java.text.SimpleDateFormat "yyyy-MM-dd HH:mm:ss")]
+
+    (println "adding events")
+    (doseq [{song-id :song_id timestamp :time skipped :skipped}
+            (jd/query db "select song_id, skipped, time from events
+                         order by time asc")]
+      (let [seconds (quot (.getTime (.parse parser timestamp)) 1000)]
+        (.add_event rec song-id (if (= skipped 1) true false) seconds)))
+
+    (dbg "sessions length" (count (:sessions @@rec)))
+    (dbg "model length" (count (:model @@rec)))
+
+    (println "making recommendations")
+    (loop [next-song (.pick_next rec false)
+           actions [true true false true false false true true]]
+      ;actions (repeat 500 true)]
+      (when (not (empty? actions))
+        (pprint next-song)
+        (println (if (first actions) "skip" "listen"))
+        (println)
+        (.add_event rec (next-song "_id") (first actions))
+        (recur (.pick_next rec false) (rest actions))))
+    (.pick_random rec false)))
 
 (defn -main [& args]
   (println "starting up")
-  ;(demo-real-data)
+  (demo-real-data)
   (println "all tests pass"))
