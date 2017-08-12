@@ -91,7 +91,8 @@ public class Moody {
 
         // get library
         SQLiteDatabase db = new Database(context).getReadableDatabase();
-        result = db.rawQuery("SELECT * FROM songs", null);
+        result = db.rawQuery("SELECT _id, artist, album, title, source, " +
+                "spotify_id, duration FROM songs", null);
         rec = new reco(cursor_to_maps(result));
         result.close();
 
@@ -138,7 +139,7 @@ public class Moody {
                     String.valueOf(algorithm)});
             rec.add_event(id, skipped);
         } else {
-            Log.e(C.TAG, "couldn't add song event");
+            Log.e(C.TAG, "couldn't find song in database");
         }
         result.close();
         db.close();

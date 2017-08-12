@@ -42,15 +42,15 @@
                       ratio n score
                       content-ratio content-n content-score])
 
-(defrecord Song [artist album title source spotify_id duration
-                 danceability
-                 energy
-                 mode
-                 speechiness
-                 acousticness
-                 instrumentalness
-                 liveness
-                 valence])
+(defrecord Song [artist album title source spotify_id duration])
+                 ;danceability
+                 ;energy
+                 ;mode
+                 ;speechiness
+                 ;acousticness
+                 ;instrumentalness
+                 ;liveness
+                 ;valence])
 
 (defn dbg [desc arg]
   (when debug
@@ -87,7 +87,9 @@
 
 (defn ses-append [sessions song-id skipped create-session]
   (if create-session
-    (cons {song-id skipped} sessions)
+    ; song id -1 represents the empty session. It gives the model something to
+    ; work with when a session is justs getting started.
+    (cons {-1 false song-id skipped} sessions)
     (if (contains? (first sessions) song-id)
       sessions
       (cons (assoc (first sessions) song-id skipped)
@@ -142,49 +144,50 @@
       (* sim (if skipped -1 1)))))
 
 
-(defn dot-product [vectors]
-  (reduce + (apply map * vectors)))
-
-(defn norm [v]
-  (Math/sqrt (reduce + (map #(* % %) v))))
-
-(defn cosine [vectors]
-  (/ (dot-product vectors)
-     (apply * (map norm vectors))))
-
-(defn feature-sim [library a b skipped]
-  (let [features [:danceability
-                  :energy
-                  :mode
-                  :speechiness
-                  :acousticness
-                  :instrumentalness
-                  :liveness
-                  :valence]
-        vectors (map (fn [song-id]
-                       (map (fn [feature] (get-in library [song-id feature]))
-                            features))
-                     [a b])
-        distance (cosine vectors)
-        sim (- (* distance 2) 1)]
-    ;(println "feature distance between" (get-in library [a :title]) "and"
-    ;         (get-in library [b :title]) "is" distance)
-    (if (and skipped (< sim 0))
-      nil
-      (* sim (if skipped -1 1)))))
+;(defn dot-product [vectors]
+;  (reduce + (apply map * vectors)))
+;
+;(defn norm [v]
+;  (Math/sqrt (reduce + (map #(* % %) v))))
+;
+;(defn cosine [vectors]
+;  (/ (dot-product vectors)
+;     (apply * (map norm vectors))))
+;
+;(defn feature-sim [library a b skipped]
+;  (let [features [:danceability
+;                  :energy
+;                  :mode
+;                  :speechiness
+;                  :acousticness
+;                  :instrumentalness
+;                  :liveness
+;                  :valence]
+;        vectors (map (fn [song-id]
+;                       (map (fn [feature] (get-in library [song-id feature]))
+;                            features))
+;                     [a b])
+;        distance (cosine vectors)
+;        sim (- (* distance 2) 1)]
+;    ;(println "feature distance between" (get-in library [a :title]) "and"
+;    ;         (get-in library [b :title]) "is" distance)
+;    (if (and skipped (< sim 0))
+;      nil
+;      (* sim (if skipped -1 1)))))
 
 (defn update-cand [[cand-id data] library model other-id skipped]
   [cand-id
    (let [sim (sim-score model other-id cand-id skipped)
          cand-artist (get-in library [cand-id :artist])
          other-artist (get-in library [other-id :artist])
-         content-sim (if (every? some? (map #(get-in library [% :mode])
-                                            [cand-id other-id]))
-                       (feature-sim library cand-id other-id skipped)
-                       (let [s (sim-score model other-artist cand-artist skipped)]
-                         (if s
-                           (min s (if (= other-artist cand-artist) 1 0.8))
-                           nil)))]
+         content-sim (sim-score model other-artist cand-artist skipped)]
+                     ;(if (every? some? (map #(get-in library [% :mode])
+                     ;                       [cand-id other-id]))
+                     ;  (feature-sim library cand-id other-id skipped)
+                     ;  (let [s (sim-score model other-artist cand-artist skipped)]
+                     ;    (if s
+                     ;      (min s (if (= other-artist cand-artist) 1 0.8))
+                     ;      nil)))]
      (cond-> data
        sim (update-score :collaborative sim)
        content-sim (update-score :content content-sim)))])
@@ -198,18 +201,17 @@
    (into {} (map #(update-cand % library model song-id skipped) candidates))))
 
 (defn penalty [delta strength]
-  (let [ret (- 1 (/ 1 (Math/exp (/ delta strength))))]
-    ret))
+  (- 1 (/ 1 (Math/exp (/ delta strength)))))
 
 (defn predicted [deltas strength]
-  (let [ret (reduce * (map #(penalty % strength) deltas))]
-    ret))
+  (reduce * (map #(penalty % strength) deltas)))
 
 (defn total-error [input-data strength]
   (reduce + (map #(Math/pow (- (predicted (:deltas %) strength)
                                (:observed %)) 2) input-data)))
 
-(def strength-set [0.2 0.5 1 1.5 2 3 5 8 13 21])
+;(def strength-set [0.2 0.5 1 1.5 2 3 5 8 13 21])
+(def strength-set [0.5 3 14])
 (defn calc-freshness [event-vec]
   (let [get-deltas (fn [i event] {:observed (if (:skipped event) 0 1)
                                   :deltas (map #(- (:day event) (:day %))

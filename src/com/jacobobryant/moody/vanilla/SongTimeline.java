@@ -695,7 +695,7 @@ public final class SongTimeline {
                     if (num != 0) {
                         break;
                     }
-                    Log.e(C.TAG, "couldn't add song: " + next);
+                    Log.e(C.TAG, "couldn't add song: " + next.title);
                     moody.rec.add_to_blacklist(next.id);
                 }
             } while (true);
