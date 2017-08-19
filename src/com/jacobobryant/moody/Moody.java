@@ -165,7 +165,8 @@ public class Moody {
                 } catch (ParseException pe) {
                     Log.e(C.TAG, "date couldn't be parsed");
                 }
-                Log.d(C.TAG, "read skip event #" + result.getPosition() +
+                Log.d(C.TAG,
+                        "read skip event #" + result.getPosition() +
                         ". in_current_session = " + in_current_session);
             }
             new SaveStateTask().execute(rec);

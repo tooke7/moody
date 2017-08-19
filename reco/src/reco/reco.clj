@@ -322,8 +322,10 @@
   (let [cur-session (set (keys session))
         cand-list (as-> candidates x 
                     (apply dissoc x (union cur-session blacklist))
-                    (remove #(and local-only
-                                  (= (get-in library [% :source]) "spotify")) x)
+                    (remove (fn [[k v]]
+                              (and local-only
+                                   (= (get-in library [k :source]) "spotify")))
+                            x)
                     (map (fn [[k v]] (assoc v :song-id k)) x)
                     (shuffle x))
         song-id (song-picker cand-list)]
