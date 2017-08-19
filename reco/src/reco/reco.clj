@@ -10,6 +10,8 @@
              [add_to_blacklist [long] void]
              [get_state [] java.util.Map]
              [set_state [java.util.Map] void]
+             [get_last_event_id [] long]
+             [set_last_event_id [long] void]
              ^:static [parse_top_tracks [String] java.util.List]
              ^:static [parse_track [String] java.util.Map]
              ^:static [parse_features [String] java.util.List]
@@ -80,7 +82,8 @@
                :session {}
                :last-time 0
                :model nil
-               :blacklist #{}})]))
+               :blacklist #{}
+               :event-id -1})]))
 
 (defn -add_to_blacklist [this song-id]
   (println "adding to blacklist:" song-id)
@@ -349,6 +352,14 @@
 
 (defn -get_state [this]
   (dissoc @@this :library :blacklist))
+
+(defn -get_last_event_id [this]
+  (:event-id @@this))
+
+(defn -set_last_event_id [this event-id]
+  (swap! (.state this)
+         (fn [state]
+           (assoc state :event-id event-id))))
 
 (defn -parse_top_tracks [response]
   (let [data (json/read-str response)]

@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
@@ -101,6 +102,7 @@ public class Moody {
         rec = new reco(cursor_to_maps(result));
         result.close();
 
+        long last_event_id = -1;
         try {
             Log.d(C.TAG, "loading state from cache");
             FileInputStream fin = context.openFileInput(STATE_FILE);
@@ -109,11 +111,16 @@ public class Moody {
             ois.close();
             fin.close();
             rec.set_state(state);
-        } catch (IOException | ClassNotFoundException e) {
-            result = db.rawQuery("SELECT song_id, skipped, time " +
-                    "FROM events ORDER BY time ASC", null);
-            Log.d(C.TAG, "couldn't load cache; reading " + result.getCount() +
-                    " skip events");
+            last_event_id = rec.get_last_event_id();
+        } catch (IOException | ClassNotFoundException e) { 
+            Log.e(C.TAG, "couldn't load cache");
+        }
+
+        result = db.rawQuery("SELECT song_id, skipped, time, _id " +
+                "FROM events WHERE _id > ? ORDER BY time ASC",
+                new String[] {String.valueOf(last_event_id)});
+        Log.d(C.TAG, "reading " + result.getCount() + " skip events");
+        if (result.getCount() > 0) {
             result.moveToPosition(-1);
             while (result.moveToNext()) {
                 int song_id = result.getInt(0);
@@ -124,16 +131,18 @@ public class Moody {
                     long seconds = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                         .parse(time).getTime() / 1000;
 
+                    // TODO figure out if do-update-cand should be true
                     rec.add_event(song_id, skipped, seconds, false);
+                    rec.set_last_event_id(result.getLong(3));
                 } catch (ParseException pe) {
                     Log.e(C.TAG, "date couldn't be parsed");
                 }
                 Log.d(C.TAG, "read skip event #" + result.getPosition());
             }
-            result.close();
-            db.close();
-            save_state();
+            new SaveStateTask().execute(rec);
         }
+        result.close();
+        db.close();
         Log.d(C.TAG, "finished moody.init()");
     }
 
@@ -157,7 +166,6 @@ public class Moody {
                     new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
                     String.valueOf(algorithm)});
             rec.add_event(id, skipped);
-            save_state();
         } else {
             Log.e(C.TAG, "couldn't find song in database");
         }
@@ -254,29 +262,33 @@ public class Moody {
             settings.getLong(PrefKeys.SPOTIFY_TOKEN_EXPIRATION, 0);
     }
 
-    private void save_state() {
-        try {
-            Log.d(C.TAG, "saving state");
-            FileOutputStream fout = context.openFileOutput(
-                    STATE_FILE, Context.MODE_PRIVATE);
-            ObjectOutputStream oos = new ObjectOutputStream(fout);
-            oos.writeObject(rec.get_state());
-            oos.close();
-            fout.close();
-        } catch (IOException e) {
-            Log.e(C.TAG, "couldn't save state");
-            try {
-                FileOutputStream fout = context.openFileOutput(
-                        STATE_FILE, Context.MODE_PRIVATE);
-                fout.write(null);
-                fout.close();
-            } catch (IOException e2) {
-                Log.e(C.TAG, "couldn't delete cache");
-            }
-        }
-    }
-    
     public void add_to_blacklist(long id) {
         rec.add_to_blacklist(id);
+    }
+
+    private class SaveStateTask extends AsyncTask<reco, Void, Void> {
+        protected Void doInBackground(reco... rec) {
+            try {
+                Log.d(C.TAG, "saving state");
+                FileOutputStream fout = context.openFileOutput(
+                        STATE_FILE, Context.MODE_PRIVATE);
+                ObjectOutputStream oos = new ObjectOutputStream(fout);
+                oos.writeObject(rec[0].get_state());
+                oos.close();
+                fout.close();
+            } catch (IOException e) {
+                Log.e(C.TAG, "couldn't save state");
+                try {
+                    FileOutputStream fout = context.openFileOutput(
+                            STATE_FILE, Context.MODE_PRIVATE);
+                    fout.write(null);
+                    fout.close();
+                } catch (IOException e2) {
+                    Log.e(C.TAG, "couldn't delete cache");
+                }
+            }
+            Log.d(C.TAG, "finished saving state");
+            return null;
+        }
     }
 }
