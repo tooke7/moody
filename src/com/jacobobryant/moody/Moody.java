@@ -121,23 +121,52 @@ public class Moody {
                 new String[] {String.valueOf(last_event_id)});
         Log.d(C.TAG, "reading " + result.getCount() + " skip events");
         if (result.getCount() > 0) {
+            // figure out which events are in the current session
+            long event_time = System.currentTimeMillis() / 1000;
+            long threshold = 60 * 20;  // 20 minutes
+            long first_id_in_session = -1;
+            result.moveToPosition(result.getCount());
+            while (result.moveToPrevious()) {
+                String time = result.getString(2);
+                try {
+                    long seconds = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+                        .parse(time).getTime() / 1000;
+                    long delta = event_time - seconds;
+                    if (delta > threshold) {
+                        break;
+                    } else {
+                        first_id_in_session = result.getLong(3);
+                        event_time = seconds;
+                    }
+                } catch (ParseException pe) {
+                    Log.e(C.TAG, "date couldn't be parsed");
+                }
+            }
+
+            // read in events
+            boolean in_current_session = false;
             result.moveToPosition(-1);
             while (result.moveToNext()) {
                 int song_id = result.getInt(0);
                 boolean skipped = (result.getInt(1) == 1);
                 String time = result.getString(2);
+                long id = result.getLong(3);
+                if (id == first_id_in_session) {
+                    in_current_session = true;
+                }
 
                 try {
                     long seconds = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                         .parse(time).getTime() / 1000;
 
                     // TODO figure out if do-update-cand should be true
-                    rec.add_event(song_id, skipped, seconds, false);
-                    rec.set_last_event_id(result.getLong(3));
+                    rec.add_event(song_id, skipped, seconds, in_current_session);
+                    rec.set_last_event_id(id);
                 } catch (ParseException pe) {
                     Log.e(C.TAG, "date couldn't be parsed");
                 }
-                Log.d(C.TAG, "read skip event #" + result.getPosition());
+                Log.d(C.TAG, "read skip event #" + result.getPosition() +
+                        ". in_current_session = " + in_current_session);
             }
             new SaveStateTask().execute(rec);
         }
