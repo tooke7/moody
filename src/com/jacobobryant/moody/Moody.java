@@ -16,6 +16,11 @@ import com.jacobobryant.moody.vanilla.PlaybackService;
 import com.jacobobryant.moody.vanilla.PrefKeys;
 import com.jacobobryant.moody.vanilla.Song;
 
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -31,14 +36,14 @@ import static android.database.Cursor.FIELD_TYPE_INTEGER;
 import static android.database.Cursor.FIELD_TYPE_STRING;
 
 public class Moody {
+    public static final String STATE_FILE = "reco_state";
     private static Moody instance;
     private Context context;
-    private List<Metadata> songs;
     public static final String AUTHORITY = "com.jacobobryant.moody.vanilla";
     public static final String ACCOUNT_TYPE = "com.jacobobryant";
     public static final String ACCOUNT = "moodyaccount";
     private Account newAccount;
-    public reco rec;
+    private reco rec;
     public boolean next_on_blacklist = false;
     private boolean was_random;
 
@@ -76,7 +81,7 @@ public class Moody {
         };
         Cursor result = context.getContentResolver().query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, proj, null, null, null);
-        songs = new ArrayList<>();
+        List<Metadata> songs = new ArrayList<>();
         result.moveToPosition(-1);
         while (result.moveToNext()) {
             String title = result.getString(0);
@@ -96,26 +101,40 @@ public class Moody {
         rec = new reco(cursor_to_maps(result));
         result.close();
 
-        // read in past skip data
-        result = db.rawQuery("SELECT song_id, skipped, time " +
-                "FROM events ORDER BY time ASC", null);
-        result.moveToPosition(-1);
-        while (result.moveToNext()) {
-            int song_id = result.getInt(0);
-            boolean skipped = (result.getInt(1) == 1);
-            String time = result.getString(2);
+        try {
+            Log.d(C.TAG, "loading state from cache");
+            FileInputStream fin = context.openFileInput(STATE_FILE);
+            ObjectInputStream ois = new ObjectInputStream(fin);
+            Map state = (Map)ois.readObject();
+            ois.close();
+            fin.close();
+            rec.set_state(state);
+        } catch (IOException | ClassNotFoundException e) {
+            result = db.rawQuery("SELECT song_id, skipped, time " +
+                    "FROM events ORDER BY time ASC", null);
+            Log.d(C.TAG, "couldn't load cache; reading " + result.getCount() +
+                    " skip events");
+            result.moveToPosition(-1);
+            while (result.moveToNext()) {
+                int song_id = result.getInt(0);
+                boolean skipped = (result.getInt(1) == 1);
+                String time = result.getString(2);
 
-            try {
-                long seconds = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-                    .parse(time).getTime() / 1000;
+                try {
+                    long seconds = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+                        .parse(time).getTime() / 1000;
 
-                rec.add_event(song_id, skipped, seconds);
-            } catch (ParseException e) {
-                Log.e(C.TAG, "date couldn't be parsed");
+                    rec.add_event(song_id, skipped, seconds, false);
+                } catch (ParseException pe) {
+                    Log.e(C.TAG, "date couldn't be parsed");
+                }
+                Log.d(C.TAG, "read skip event #" + result.getPosition());
             }
+            result.close();
+            db.close();
+            save_state();
         }
-        result.close();
-        db.close();
+        Log.d(C.TAG, "finished moody.init()");
     }
 
     public void update(Song last_song, boolean skipped) {
@@ -138,6 +157,7 @@ public class Moody {
                     new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
                     String.valueOf(algorithm)});
             rec.add_event(id, skipped);
+            save_state();
         } else {
             Log.e(C.TAG, "couldn't find song in database");
         }
@@ -146,7 +166,7 @@ public class Moody {
     }
 
     public Metadata pick_next(boolean local_only) {
-        float CONTROL_PROB = 0.2f;
+        float CONTROL_PROB = 0.0f;
         was_random = Math.random() < CONTROL_PROB;
         Map ret = (was_random) ? rec.pick_random(local_only) :
                                  rec.pick_next(local_only);
@@ -232,5 +252,31 @@ public class Moody {
 		SharedPreferences settings = PlaybackService.getSettings(context);
         return System.currentTimeMillis() / 1000 >
             settings.getLong(PrefKeys.SPOTIFY_TOKEN_EXPIRATION, 0);
+    }
+
+    private void save_state() {
+        try {
+            Log.d(C.TAG, "saving state");
+            FileOutputStream fout = context.openFileOutput(
+                    STATE_FILE, Context.MODE_PRIVATE);
+            ObjectOutputStream oos = new ObjectOutputStream(fout);
+            oos.writeObject(rec.get_state());
+            oos.close();
+            fout.close();
+        } catch (IOException e) {
+            Log.e(C.TAG, "couldn't save state");
+            try {
+                FileOutputStream fout = context.openFileOutput(
+                        STATE_FILE, Context.MODE_PRIVATE);
+                fout.write(null);
+                fout.close();
+            } catch (IOException e2) {
+                Log.e(C.TAG, "couldn't delete cache");
+            }
+        }
+    }
+    
+    public void add_to_blacklist(long id) {
+        rec.add_to_blacklist(id);
     }
 }
