@@ -229,7 +229,6 @@ public class LibraryActivity
 		loadAlbumIntent(getIntent());
 		bindControlButtons();
 
-		Toast.makeText(this, "Loading...", Toast.LENGTH_LONG);
 		if (init_moody) {
 			//new Thread() {
 			//	public void run() {
@@ -250,7 +249,7 @@ public class LibraryActivity
             } else {
                 Log.d(C.TAG, "spotify token is still valid");
                 Log.d(C.TAG, "token: " + settings.getString(PrefKeys.SPOTIFY_TOKEN, null));
-                Moody.getInstance(LibraryActivity.this);
+                new Moody.InitTask(this).execute();
             }
 		}
 
@@ -272,7 +271,6 @@ public class LibraryActivity
                         .putLong(PrefKeys.SPOTIFY_TOKEN_EXPIRATION,
                                 response.getExpiresIn() + System.currentTimeMillis() / 1000)
                         .commit();
-                    Moody.getInstance(LibraryActivity.this);
                     break;
                 case ERROR:
                     Log.e(C.TAG, "Spotify auth error: " + response.getError());
@@ -280,6 +278,7 @@ public class LibraryActivity
                 default:
                     break;
             }
+            new Moody.InitTask(this).execute();
         }
     }
 

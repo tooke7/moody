@@ -2,6 +2,7 @@ package com.jacobobryant.moody;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
+import android.app.ProgressDialog;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -50,20 +51,29 @@ public class Moody {
 
     private Moody() { }
 
-    public static Moody getInstance(Context context) {
+    public static Moody getInstance(Context context,
+            InitProgressListener listener) {
         if (instance == null) {
             Log.d(C.TAG, "package name:" + context.getPackageName());
             instance = new Moody();
             instance.context = context;
-            instance.init();
+            instance.init(listener);
         }
         return instance;
     }
 
-    private void init() {
+    public static Moody getInstance(Context context) {
+        return getInstance(context, new InitProgressListener() {
+            @Override
+            public void update(String s) { }
+        });
+    }
+
+    private void init(InitProgressListener listener) {
         Log.d(C.TAG, "Moody.init()");
 
         // setup sync adapter
+        listener.update("Setting up sync adapter");
         final long SYNC_INTERVAL = 60L * 60L * 24L;
         newAccount = new Account(ACCOUNT, ACCOUNT_TYPE);
         AccountManager accountManager = (AccountManager) context.getSystemService(Context.ACCOUNT_SERVICE);
@@ -76,6 +86,7 @@ public class Moody {
         ContentResolver.addPeriodicSync(newAccount, AUTHORITY, Bundle.EMPTY, SYNC_INTERVAL);
 
         // read local songs
+        listener.update("reading local library");
         final String[] proj = {MediaStore.Audio.Media.TITLE,
                                MediaStore.Audio.Media.ARTIST,
                                MediaStore.Audio.Media.ALBUM,
@@ -96,6 +107,7 @@ public class Moody {
         result.close();
 
         // get library
+        listener.update("setting up recommendation engine");
         SQLiteDatabase db = new Database(context).getReadableDatabase();
         result = db.rawQuery("SELECT _id, artist, album, title, source, " +
                 "spotify_id, duration FROM songs", null);
@@ -104,7 +116,8 @@ public class Moody {
 
         long last_event_id = -1;
         try {
-            Log.d(C.TAG, "loading state from cache");
+            Log.d(C.TAG, "loading listening data from cache");
+            listener.update("loading listening history from cache");
             FileInputStream fin = context.openFileInput(STATE_FILE);
             ObjectInputStream ois = new ObjectInputStream(fin);
             Map state = (Map)ois.readObject();
@@ -121,6 +134,7 @@ public class Moody {
                 new String[] {String.valueOf(last_event_id)});
         Log.d(C.TAG, "reading " + result.getCount() + " skip events");
         if (result.getCount() > 0) {
+            listener.update("analyzing listening history");
             // figure out which events are in the current session
             long event_time = System.currentTimeMillis() / 1000;
             long threshold = 60 * 20;  // 20 minutes
@@ -159,7 +173,6 @@ public class Moody {
                     long seconds = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                         .parse(time).getTime() / 1000;
 
-                    // TODO figure out if do-update-cand should be true
                     rec.add_event(song_id, skipped, seconds, in_current_session);
                     rec.set_last_event_id(id);
                 } catch (ParseException pe) {
@@ -169,7 +182,9 @@ public class Moody {
                         "read skip event #" + result.getPosition() +
                         ". in_current_session = " + in_current_session);
             }
-            new SaveStateTask().execute(rec);
+            //new SaveStateTask().execute(rec);
+            listener.update("saving recommendation model");
+            saveState(context, rec);
         }
         result.close();
         db.close();
@@ -298,27 +313,69 @@ public class Moody {
 
     private class SaveStateTask extends AsyncTask<reco, Void, Void> {
         protected Void doInBackground(reco... rec) {
-            try {
-                Log.d(C.TAG, "saving state");
-                FileOutputStream fout = context.openFileOutput(
-                        STATE_FILE, Context.MODE_PRIVATE);
-                ObjectOutputStream oos = new ObjectOutputStream(fout);
-                oos.writeObject(rec[0].get_state());
-                oos.close();
-                fout.close();
-            } catch (IOException e) {
-                Log.e(C.TAG, "couldn't save state");
-                try {
-                    FileOutputStream fout = context.openFileOutput(
-                            STATE_FILE, Context.MODE_PRIVATE);
-                    fout.write(null);
-                    fout.close();
-                } catch (IOException e2) {
-                    Log.e(C.TAG, "couldn't delete cache");
-                }
-            }
-            Log.d(C.TAG, "finished saving state");
+            saveState(context, rec[0]);
             return null;
         }
+    }
+
+    public static void saveState(Context context, reco rec) {
+        try {
+            Log.d(C.TAG, "saving state");
+            FileOutputStream fout = context.openFileOutput(
+                    STATE_FILE, Context.MODE_PRIVATE);
+            ObjectOutputStream oos = new ObjectOutputStream(fout);
+            oos.writeObject(rec.get_state());
+            oos.close();
+            fout.close();
+        } catch (IOException e) {
+            Log.e(C.TAG, "couldn't save state");
+            try {
+                FileOutputStream fout = context.openFileOutput(
+                        STATE_FILE, Context.MODE_PRIVATE);
+                fout.write(null);
+                fout.close();
+            } catch (IOException e2) {
+                Log.e(C.TAG, "couldn't delete cache");
+            }
+        }
+        Log.d(C.TAG, "finished saving state");
+    }
+
+    public static class InitTask extends AsyncTask<Void, String, Void> {
+        ProgressDialog dialog;
+        Context c;
+
+        public InitTask(Context c) {
+            super();
+            this.dialog = new ProgressDialog(c);
+            this.c = c;
+            dialog.setTitle("Loading model");
+            dialog.setCancelable(false);
+            dialog.show();
+        }
+
+        @Override
+        protected void onProgressUpdate(String... s) {
+            dialog.setMessage(s[0]);
+        }
+
+        @Override
+        protected Void doInBackground(Void... v) {
+            Moody.getInstance(c, new InitProgressListener() {
+                public void update(String s) {
+                    publishProgress(s);
+                }
+            });
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void v) {
+            dialog.dismiss();
+        }
+    }
+
+    interface InitProgressListener {
+        void update(String foo);
     }
 }
