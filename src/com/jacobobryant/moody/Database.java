@@ -5,8 +5,25 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
 public class Database extends SQLiteOpenHelper {
-    public static final int VERSION = 5;
+    public static final int VERSION = 6;
     public static final String FILE = "moody.db";
+    public static final String MODEL_SQL =
+        "create table model (" +
+        "_id integer primary key autoincrement, " +
+        "id_a integer, " +
+        "id_b integer, " +
+        "score real, " +
+        "n integer, " +
+        "unique(id_a, id_b))";
+    public static final String ARTIST_MODEL_SQL =
+        "create table artist_model (" +
+        "_id integer primary key autoincrement, " +
+        "artist_a text, " +
+        "artist_b text, " +
+        "score real, " +
+        "n integer, " +
+        "unique(artist_a, artist_b))";
+
 
     public Database(Context context) {
         super(context, FILE, null, VERSION);
@@ -37,6 +54,8 @@ public class Database extends SQLiteOpenHelper {
                    "algorithm INTEGER, " +
                    "time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
                    "FOREIGN KEY (song_id) REFERENCES songs(_id))");
+        db.execSQL(MODEL_SQL);
+        db.execSQL(ARTIST_MODEL_SQL);
     }
 
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
@@ -76,8 +95,10 @@ public class Database extends SQLiteOpenHelper {
             db.setTransactionSuccessful();
             db.endTransaction();
         }
-        //db.execSQL("DROP TABLE songs");
-        //db.execSQL("DROP TABLE events");
-        //onCreate(db);
+        if (oldVersion == 5) {
+            oldVersion++;
+            db.execSQL(MODEL_SQL);
+            db.execSQL(ARTIST_MODEL_SQL);
+        }
     }
 }

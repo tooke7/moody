@@ -2,9 +2,9 @@
   (:gen-class
    :implements [clojure.lang.IDeref java.io.Serializable]
    :state state
-   :methods [[add_event [long boolean long boolean] void]
-             [add_event [long boolean long] void]
-             [add_event [long boolean] void]
+   :methods [[add_event [java.util.Map long boolean long boolean] void]
+             [add_event [java.util.Map long boolean long] void]
+             [add_event [java.util.Map long boolean] void]
              [pick_next [boolean] java.util.Map]
              [pick_random [boolean] java.util.Map]
              [add_to_blacklist [long] void]
@@ -72,7 +72,7 @@
   ; the get-in call in mk-candidate always returns 0.
   (let [library (->> raw-songs
                      (map #(into {} %))
-                     (map walk/keywordize-keys)
+                     walk/keywordize-keys
                      (map (fn [item] [(item :_id)
                                       (map->Song (dissoc item :_id))]))
                      (into {}))
@@ -81,7 +81,6 @@
                :candidates (zipmap (keys library) candidates)
                :session {}
                :last-time 0
-               :model nil
                :blacklist #{}
                :event-id -1})]))
 
@@ -132,12 +131,11 @@
         new-score (* (+ new-ratio margin) (:freshness candidate))]
     (assoc candidate score-key new-score ratio-key new-ratio n-key new-n)))
 
-(defn sim-score [model a b skipped]
-  (let [sim (if (= a b) 1 (get-in model [(set [a b]) :score]))]
+(defn sim-score [model id skipped]
+  (let [sim (get-in model [id :score])]
     (if (or (nil? sim) (and skipped (< sim 0)))
       nil
       (* sim (if skipped -1 1)))))
-
 
 ;(defn dot-product [vectors]
 ;  (reduce + (apply map * vectors)))
@@ -170,12 +168,11 @@
 ;      nil
 ;      (* sim (if skipped -1 1)))))
 
-(defn update-cand [[cand-id data] library model other-id skipped]
+(defn update-cand [[cand-id data] library model skipped]
   [cand-id
-   (let [sim (sim-score model other-id cand-id skipped)
+   (let [sim (sim-score model cand-id skipped)
          cand-artist (get-in library [cand-id :artist])
-         other-artist (get-in library [other-id :artist])
-         content-sim (sim-score model other-artist cand-artist skipped)]
+         content-sim (sim-score model cand-artist skipped)]
                      ;(if (every? some? (map #(get-in library [% :mode])
                      ;                       [cand-id other-id]))
                      ;  (feature-sim library cand-id other-id skipped)
@@ -188,12 +185,12 @@
        content-sim (update-score :content content-sim)))])
 
 (defn update-candidates
-  ([state song-id skipped]
-   (let [{candidates :candidates model :model library :library} state]
+  ([state model skipped]
+   (let [{candidates :candidates library :library} state]
      (assoc state :candidates
-            (update-candidates candidates library model song-id skipped))))
-  ([candidates library model song-id skipped]
-   (into {} (map #(update-cand % library model song-id skipped) candidates))))
+            (update-candidates candidates library model skipped))))
+  ([candidates library model skipped]
+   (into {} (map #(update-cand % library model skipped) candidates))))
 
 (defn penalty [delta strength]
   (- 1 (/ 1 (Math/exp (/ delta strength)))))
@@ -217,6 +214,7 @@
         deltas (map (fn [e] (max (- day (:day e)) 0)) event-vec)]
     (predicted deltas strength)))
 
+; TODO refactor
 (defn reset-candidates [candidates]
   (into {} (map (fn [[song-id data]]
                   [song-id
@@ -231,16 +229,16 @@
                           :content-score 1)])
                 candidates)))
 
-(defn update-model [model session library]
-  (let [partial-model (mk-model session library)]
-    (merge-with (fn [{score-a :score n-a :n} {score-b :score n-b :n}]
-                  (Cell. (/ (+ (* score-a n-a) (* score-b n-b))
-                            (+ n-a n-b))
-                         (+ n-a n-b)))
-                model partial-model)))
+;(defn update-model [model session library]
+;  (let [partial-model (mk-model session library)]
+;    (merge-with (fn [{score-a :score n-a :n} {score-b :score n-b :n}]
+;                  (Cell. (/ (+ (* score-a n-a) (* score-b n-b))
+;                            (+ n-a n-b))
+;                         (+ n-a n-b)))
+;                model partial-model)))
 
 (defn -add_event
-  ([this song-id skipped timestamp do-cand-update]
+  ([this model song-id skipped timestamp do-cand-update]
    (swap! (.state this)
           (fn [state]
             (let [time-delta (- timestamp (:last-time state))
@@ -250,27 +248,26 @@
                   ; started.
                   session (if new-session
                             {-1 false song-id skipped}
-                            (assoc (:session state) song-id skipped))
-                  new-model (when new-session
-                              (update-model (:model state) (:session state)
-                                            (:library state)))]
+                            (assoc (:session state) song-id skipped))]
 
               (when (< timestamp (:last-time state))
                 (printf "WARNING: timestamp=%d but last-time=%d\n"
                         timestamp (:last-time state)))
 
               (cond-> state
-                true (assoc :last-time timestamp
-                            :session session)
+                true (assoc :last-time timestamp :session session)
                 true (update-in [:candidates song-id :event-vec]
                                 #(conj % (Event. (/ timestamp 86400) skipped)))
-                new-model (assoc :model new-model :candidates
-                                 (reset-candidates (:candidates state)))
-                do-cand-update (update-candidates song-id skipped))))))
-  ([this song-id skipped timestamp]
-   (.add_event this song-id skipped timestamp true))
-  ([this song-id skipped]
-   (.add_event this song-id skipped (now))))
+                new-session (update :candidates reset-candidates)
+                do-cand-update (update-candidates 
+                                 (walk/keywordize-keys model)
+                                 song-id skipped))
+              (when new-session
+                (mk-model (:session state) (:library state)))))))
+  ([this model song-id skipped timestamp]
+   (.add_event this model song-id skipped timestamp true))
+  ([this model song-id skipped]
+   (.add_event this model song-id skipped (now))))
 
 ;(defn init-model [this]
 ;  (println "init model")
