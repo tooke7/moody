@@ -266,6 +266,7 @@
                                 #(conj % (Event. (/ timestamp 86400) skipped)))
                 new-model (assoc :model new-model :candidates
                                  (reset-candidates (:candidates state)))
+                new-model (update-candidates -1 false)
                 do-cand-update (update-candidates song-id skipped))))))
   ([this song-id skipped timestamp]
    (.add_event this song-id skipped timestamp true))
