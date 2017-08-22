@@ -210,7 +210,7 @@ public class Moody {
             db.execSQL("INSERT INTO events (song_id, skipped, algorithm) VALUES (?, ?, ?)",
                     new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
                     String.valueOf(algorithm)});
-            rec.add_event(id, skipped);
+            Map< model = rec.add_event(id, skipped);
         } else {
             Log.e(C.TAG, "couldn't find song in database");
         }

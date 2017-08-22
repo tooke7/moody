@@ -2,9 +2,9 @@
   (:gen-class
    :implements [clojure.lang.IDeref java.io.Serializable]
    :state state
-   :methods [[add_event [java.util.Map long boolean long boolean] void]
-             [add_event [java.util.Map long boolean long] void]
-             [add_event [java.util.Map long boolean] void]
+   :methods [[add_event [java.util.Map long boolean long boolean] java.util.Map]
+             [add_event [java.util.Map long boolean long] java.util.Map]
+             [add_event [java.util.Map long boolean] java.util.Map]
              [pick_next [boolean] java.util.Map]
              [pick_random [boolean] java.util.Map]
              [add_to_blacklist [long] void]
@@ -103,16 +103,17 @@
 (defn merge-models [models]
   (apply merge-with #(merge-with + %1 %2) models))
 
-(defrecord Cell [score n])
+(defrecord Cell [song_a song_b score n])
 (defn convert-cell [[song-pair frac]]
   ; take out max?
-  [song-pair (Cell.
-               (- (* 2 (/ (:num frac) (max 1 (:den frac)))) 1)
-               (:den frac))])
+  (let [[a b] (sort song-pair)]
+    (Cell. a b
+           (- (* 2 (/ (:num frac) (max 1 (:den frac)))) 1)
+           (:den frac))))
 
 (defn mk-model [session library]
   (->> session (mini-model library) flatten
-       merge-models (map convert-cell) (into {})))
+       merge-models (map convert-cell)))
 
 (defn calc-margin [n]
   (/ 1 (Math/pow 1.1 n)))
@@ -259,11 +260,12 @@
                 true (update-in [:candidates song-id :event-vec]
                                 #(conj % (Event. (/ timestamp 86400) skipped)))
                 new-session (update :candidates reset-candidates)
-                do-cand-update (update-candidates 
-                                 (walk/keywordize-keys model)
-                                 song-id skipped))
+                new-session (update-candidates (walk/keywordize-keys model)
+                                               -1 false)
+                do-cand-update (update-candidates (walk/keywordize-keys model)
+                                                  song-id skipped))
               (when new-session
-                (mk-model (:session state) (:library state)))))))
+                (walk/stringify-keys (mk-model (:session state) (:library state))))))))
   ([this model song-id skipped timestamp]
    (.add_event this model song-id skipped timestamp true))
   ([this model song-id skipped]
