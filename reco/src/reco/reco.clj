@@ -2,9 +2,9 @@
   (:gen-class
    :implements [clojure.lang.IDeref java.io.Serializable]
    :state state
-   :methods [[add_event [java.util.Map long boolean long boolean] java.util.Map]
-             [add_event [java.util.Map long boolean long] java.util.Map]
-             [add_event [java.util.Map long boolean] java.util.Map]
+   :methods [[add_event [java.util.Map long boolean long boolean] java.util.Collection]
+             [add_event [java.util.Map long boolean long] java.util.Collection]
+             [add_event [java.util.Map long boolean] java.util.Collection]
              [pick_next [boolean] java.util.Map]
              [pick_random [boolean] java.util.Map]
              [add_to_blacklist [long] void]
@@ -12,6 +12,8 @@
              [set_state [java.util.Map] void]
              [get_last_event_id [] long]
              [set_last_event_id [long] void]
+             ^:static [modelify [java.util.Collection long] java.util.Map]
+             ^:static [modelify [java.util.Collection long java.util.Collection String] java.util.Map]
              ^:static [parse_top_tracks [String] java.util.List]
              ^:static [parse_track [String] java.util.Map]
              ^:static [parse_features [String] java.util.List]
@@ -133,7 +135,7 @@
     (assoc candidate score-key new-score ratio-key new-ratio n-key new-n)))
 
 (defn sim-score [model id skipped]
-  (let [sim (get-in model [id :score])]
+  (let [sim (model id)]
     (if (or (nil? sim) (and skipped (< sim 0)))
       nil
       (* sim (if skipped -1 1)))))
@@ -264,8 +266,9 @@
                                                -1 false)
                 do-cand-update (update-candidates (walk/keywordize-keys model)
                                                   song-id skipped))
-              (when new-session
-                (walk/stringify-keys (mk-model (:session state) (:library state))))))))
+              (if new-session
+                (walk/stringify-keys (mk-model (:session state) (:library state)))
+                [])))))
   ([this model song-id skipped timestamp]
    (.add_event this model song-id skipped timestamp true))
   ([this model song-id skipped]
@@ -361,6 +364,17 @@
   (swap! (.state this)
          (fn [state]
            (assoc state :event-id event-id))))
+
+(defn -modelify
+  ([song-model song-id]
+   (into {} (fn [{id-a "id_a" id-b "id_b" score "score"}]
+              [(if (= id-a id) id-b id-a)
+               score])))
+  ([song-model song-id artist-model artist]
+   (merge (-modelify song_model song-id)
+          (into {} (fn [{artist-a "artist_a" artist-b "artist_b" score "score"}]
+                     [(if (= artist-a artist) artist-b artist-a)
+                      score])))))
 
 (defn -parse_top_tracks [response]
   (let [data (json/read-str response)]

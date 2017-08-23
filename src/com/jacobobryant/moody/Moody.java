@@ -210,13 +210,80 @@ public class Moody {
             db.execSQL("INSERT INTO events (song_id, skipped, algorithm) VALUES (?, ?, ?)",
                     new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
                     String.valueOf(algorithm)});
-            Map< model = rec.add_event(id, skipped);
+
+
+            List song_model = cursor_to_maps(db.rawQuery(
+                        "select id_a, id_b, score from model where id_a = ?1 or id_b = ?1",
+                        new String[] {String.valueOf(id)}));
+            Map model;
+            if (m.artist != null) {
+                List artist_model = cursor_to_maps(db.rawQuery(
+                            "select artist_a, artist_b, score from artist_model where artist_a = ?1 or artist_b = ?1",
+                            new String[] {m.artist}));
+                model = rec.modelify(song_model, artist_model);
+            } else {
+                model = rec.modelify(song_model);
+            }
+
+            db.beginTransaction();
+            for (Map new_model_part : rec.add_event(model, id, skipped)) {
+                update_model(new_model_part, db);
+            }
+            db.setTransactionSuccessful();
+            db.endTransaction();
         } else {
             Log.e(C.TAG, "couldn't find song in database");
         }
         result.close();
         db.close();
     }
+
+    private void update_model(Map model_part, SQLiteDatabase db) {
+        double score = (double)model_part.get("score");
+        int n = (int)model_part.get("n");
+        try {
+            String song_a = String.valueOf((int)model_part.get("song_a"));
+            String song_b = String.valueOf((int)model_part.get("song_b"));
+            Cursor old_model = db.rawQuery("select score, n from model where id_a = ? and id_b = ?",
+                    new String[] {song_a, song_b});
+            if (old_model.getCount() > 0) {
+                old_model.moveToPosition(0);
+                double old_score = old_model.getDouble(0);
+                int old_n = old_model.getInteger(1);
+
+                int new_n = old_n + n;
+                double new_score = (score * n + old_score * old_n) / new_n;
+                db.execSQL("update model set score = ?, n = ? where id_a = ? and id_b = ?",
+                        new String[] {String.valueOf(new_score), String.valueOf(new_n),
+                            song_a, song_b});
+            } else {
+                db.execSQL("insert into model (score, n, id_a, id_b) values (?, ?, ?, ?)",
+                        new String[] {String.valueOf(score), String.valueOf(n),
+                            song_a, song_b});
+            }
+        } catch (ClassCastException e) {
+            String artist_a = (String)model_part.get("song_a");
+            String artist_b = (String)model_part.get("song_b");
+            Cursor old_model = db.rawQuery("select score, n from artist_model where artist_a = ? and artist_b = ?",
+                    new String[] {artist_a, artist_b});
+            if (old_model.getCount() > 0) {
+                old_model.moveToPosition(0);
+                double old_score = old_model.getDouble(0);
+                int old_n = old_model.getInteger(1);
+
+                int new_n = old_n + n;
+                double new_score = (score * n + old_score * old_n) / new_n;
+                db.execSQL("update artist_model set score = ?, n = ? where artist_a = ? and artist_b = ?",
+                        new String[] {String.valueOf(new_score), String.valueOf(new_n),
+                            artist_a, artist_b});
+            } else {
+                db.execSQL("insert into artist_model (score, n, artist_a, artist_b) values (?, ?, ?, ?)",
+                        new String[] {String.valueOf(score), String.valueOf(n),
+                            artist_a, artist_b});
+            }
+        }
+    }
+
 
     public Metadata pick_next(boolean local_only) {
         float CONTROL_PROB = 0.0f;
