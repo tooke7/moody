@@ -103,13 +103,16 @@ public class Moody {
         // get library
         listener.update("setting up recommendation engine");
         SQLiteDatabase db = new Database(context).getReadableDatabase();
-        result = db.rawQuery("SELECT _id, artist, album, title, source, " +
-                "spotify_id, duration FROM songs", null);
-        rec = new reco(cursor_to_maps(result));
-        result.close();
+        rec = new reco(cursor_to_maps(
+                    db.rawQuery("SELECT _id, artist, album, title, source, " +
+                        "spotify_id, duration FROM songs", null)));
+                    
 
 		SharedPreferences settings = PlaybackService.getSettings(context);
-        long last_event_in_model = settings.getLong(PrefKeys.LAST_EVENT_IN_MODEL, -1);
+        long last_event_in_model = -1;  //settings.getLong(PrefKeys.LAST_EVENT_IN_MODEL, -1);
+        db.execSQL("DELETE FROM model");  // lololol
+        db.execSQL("DELETE FROM artist_model");
+        Log.d(C.TAG, "last_event_in_model: " + last_event_in_model);
 
         result = db.rawQuery("SELECT song_id, skipped, time, events._id, artist " +
                 "FROM events JOIN songs on song_id = songs._id WHERE events._id > ? ORDER BY time ASC",
@@ -156,7 +159,7 @@ public class Moody {
                     long seconds = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                         .parse(time).getTime() / 1000;
 
-                    add_event(song_id, skipped, seconds, in_current_session, artist);
+                    add_event(song_id, id, skipped, seconds, in_current_session, artist);
                 } catch (ParseException pe) {
                     Log.e(C.TAG, "date couldn't be parsed");
                 }
@@ -196,7 +199,7 @@ public class Moody {
             db.execSQL("INSERT INTO events (song_id, skipped, algorithm) VALUES (?, ?, ?)",
                     new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
                     String.valueOf(C.ALG_VERSION)});
-            add_event(id, skipped, null, true, m.artist);
+            add_event(id, null, skipped, null, true, m.artist);
         } else {
             Log.e(C.TAG, "couldn't find song in database");
         }
@@ -204,25 +207,29 @@ public class Moody {
         db.close();
     }
 
-    private void add_event(long id, boolean skipped, Long seconds, boolean do_update, String artist) {
+    private void add_event(long song_id, Long event_id, boolean skipped, Long seconds,
+            boolean do_update, String artist) {
         SQLiteDatabase db = new Database(context).getWritableDatabase();
         Collection new_model;
         if (seconds == null) {
-            new_model = rec.add_event(get_model(db, id, artist), id, skipped);
+            new_model = rec.add_event(get_model(db, song_id, artist), song_id, skipped);
         } else {
-            new_model = rec.add_event(get_model(db, id, artist), id, skipped, seconds, do_update);
+            new_model = rec.add_event(get_model(db, song_id, artist), song_id, skipped, seconds, do_update);
         }
         if (new_model.size() > 0) {
+            Log.d(C.TAG, "updating " + new_model.size() + " parts of model");
             db.beginTransaction();
             for (Map new_model_part : (Collection<Map>)new_model) {
                 update_model(new_model_part, db);
             }
-            long last_event = (long)cursor_to_maps(db.rawQuery(
-                        "select _id from events order by _id desc limit 2", null))
-                .get(1).get("_id");
+            if (event_id == null) {
+                event_id = new Long((int)cursor_to_maps(db.rawQuery(
+                            "select _id from events order by _id desc limit 1", null))
+                    .get(0).get("_id"));
+            }
             SharedPreferences.Editor editor =
                 PlaybackService.getSettings(context).edit();
-            editor.putLong(PrefKeys.LAST_EVENT_IN_MODEL, last_event);
+            editor.putLong(PrefKeys.LAST_EVENT_IN_MODEL, event_id - 1);
             editor.commit();
             db.setTransactionSuccessful();
             db.endTransaction();
@@ -235,16 +242,11 @@ public class Moody {
             return;
         }
 
-        double score;
-        try {
-            score = (double)model_part.get("score");
-        } catch (ClassCastException e) {
-            score = new Double((long)model_part.get("score"));
-        }
+        double score = (double)model_part.get("score");
         long n = (long)model_part.get("n");
         try {
-            String song_a = String.valueOf((int)model_part.get("song_a"));
-            String song_b = String.valueOf((int)model_part.get("song_b"));
+            String song_a = String.valueOf((long)model_part.get("song_a"));
+            String song_b = String.valueOf((long)model_part.get("song_b"));
             Cursor old_model = db.rawQuery("select score, n from model where id_a = ? and id_b = ?",
                     new String[] {song_a, song_b});
             if (old_model.getCount() > 0) {
@@ -262,7 +264,9 @@ public class Moody {
                         new String[] {String.valueOf(score), String.valueOf(n),
                             song_a, song_b});
             }
+            old_model.close();
         } catch (ClassCastException e) {
+            //Log.e(C.TAG, "uh oh:", e);
             String artist_a = (String)model_part.get("song_a");
             String artist_b = (String)model_part.get("song_b");
             Cursor old_model = db.rawQuery("select score, n from artist_model where artist_a = ? and artist_b = ?",
@@ -282,6 +286,7 @@ public class Moody {
                         new String[] {String.valueOf(score), String.valueOf(n),
                             artist_a, artist_b});
             }
+            old_model.close();
         }
     }
 
@@ -308,6 +313,7 @@ public class Moody {
                 query = "UPDATE songs SET source = \"local\" WHERE _id = ?";
                 db.execSQL(query, new String[] {String.valueOf(result.getInt(0))});
             }
+            result.close();
         }
         db.setTransactionSuccessful();
         db.endTransaction();
@@ -362,6 +368,7 @@ public class Moody {
             }
             list.add(m);
         }
+        c.close();
         return list;
     }
 

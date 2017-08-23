@@ -110,7 +110,7 @@
   ; take out max?
   (let [[a b] (sort song-pair)]
     (Cell. a b
-           (- (* 2 (/ (:num frac) (max 1 (:den frac)))) 1)
+           (.doubleValue (- (* 2 (/ (:num frac) (max 1 (:den frac)))) 1))
            (:den frac))))
 
 (defn mk-model [session library]
@@ -244,8 +244,7 @@
 
 
 (defn add-event [state model song-id skipped timestamp do-cand-update]
-  (dbg "last-time" (:last-time state))
-  (dbg "timestamp" timestamp)
+  (dbg "add-event song-id" song-id)
   (let [time-delta (- timestamp (:last-time state))
         new-session (> time-delta ses-threshold)
         ; song id -1 represents the empty session. It gives the model
@@ -279,7 +278,7 @@
    (let [{new-model :new-model} (swap! (.state this) add-event model song-id
                                        skipped timestamp do-cand-update)]
      (swap! (.state this) #(dissoc % :new-model))
-     (dbg "new-model" new-model)))
+     new-model))
   ([this model song-id skipped timestamp]
    (.add_event this model song-id skipped timestamp true))
   ([this model song-id skipped]
