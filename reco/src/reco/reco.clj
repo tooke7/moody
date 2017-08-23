@@ -135,7 +135,7 @@
     (assoc candidate score-key new-score ratio-key new-ratio n-key new-n)))
 
 (defn sim-score [model id skipped]
-  (let [sim (model id)]
+  (let [sim (get model id)]
     (if (or (nil? sim) (and skipped (< sim 0)))
       nil
       (* sim (if skipped -1 1)))))
@@ -208,14 +208,15 @@
 ;(def strength-set [0.2 0.5 1 1.5 2 3 5 8 13 21])
 (def strength-set [0.5 3 14])
 (defn calc-freshness [event-vec]
-  (let [get-deltas (fn [i event] {:observed (if (:skipped event) 0 1)
-                                  :deltas (map #(- (:day event) (:day %))
-                                               (take i event-vec))})
-        input-data (map-indexed get-deltas event-vec)
-        strength (apply min-key #(total-error input-data %) strength-set)
-        day (/ (now) 86400)
-        deltas (map (fn [e] (max (- day (:day e)) 0)) event-vec)]
-    (predicted deltas strength)))
+  1)
+;  (let [get-deltas (fn [i event] {:observed (if (:skipped event) 0 1)
+;                                  :deltas (map #(- (:day event) (:day %))
+;                                               (take i event-vec))})
+;        input-data (map-indexed get-deltas event-vec)
+;        strength (apply min-key #(total-error input-data %) strength-set)
+;        day (/ (now) 86400)
+;        deltas (map (fn [e] (max (- day (:day e)) 0)) event-vec)]
+;    (predicted deltas strength)))
 
 ; TODO refactor
 (defn reset-candidates [candidates]
@@ -240,35 +241,45 @@
 ;                         (+ n-a n-b)))
 ;                model partial-model)))
 
+
+
+(defn add-event [state model song-id skipped timestamp do-cand-update]
+  (dbg "last-time" (:last-time state))
+  (dbg "timestamp" timestamp)
+  (let [time-delta (- timestamp (:last-time state))
+        new-session (> time-delta ses-threshold)
+        ; song id -1 represents the empty session. It gives the model
+        ; something to work with when a session is just getting
+        ; started.
+        session (if new-session
+                  {-1 false song-id skipped}
+                  (assoc (:session state) song-id skipped))]
+
+    (when (< timestamp (:last-time state))
+      (printf "WARNING: timestamp=%d but last-time=%d\n"
+              timestamp (:last-time state)))
+
+    (cond-> state
+      true (assoc :last-time timestamp :session session)
+      true (update-in [:candidates song-id :event-vec]
+                      #(conj % (Event. (/ timestamp 86400) skipped)))
+      new-session (update :candidates reset-candidates)
+      new-session (update-candidates (walk/keywordize-keys model)
+                                     -1 false)
+      do-cand-update (update-candidates (walk/keywordize-keys model)
+                                        song-id skipped)
+      true (assoc :new-model (if new-session
+                               (walk/stringify-keys
+                                 (mk-model (:session state)
+                                           (:library state)))
+                               [])))))
+
 (defn -add_event
   ([this model song-id skipped timestamp do-cand-update]
-   (swap! (.state this)
-          (fn [state]
-            (let [time-delta (- timestamp (:last-time state))
-                  new-session (> time-delta ses-threshold)
-                  ; song id -1 represents the empty session. It gives the model
-                  ; something to work with when a session is just getting
-                  ; started.
-                  session (if new-session
-                            {-1 false song-id skipped}
-                            (assoc (:session state) song-id skipped))]
-
-              (when (< timestamp (:last-time state))
-                (printf "WARNING: timestamp=%d but last-time=%d\n"
-                        timestamp (:last-time state)))
-
-              (cond-> state
-                true (assoc :last-time timestamp :session session)
-                true (update-in [:candidates song-id :event-vec]
-                                #(conj % (Event. (/ timestamp 86400) skipped)))
-                new-session (update :candidates reset-candidates)
-                new-session (update-candidates (walk/keywordize-keys model)
-                                               -1 false)
-                do-cand-update (update-candidates (walk/keywordize-keys model)
-                                                  song-id skipped))
-              (if new-session
-                (walk/stringify-keys (mk-model (:session state) (:library state)))
-                [])))))
+   (let [{new-model :new-model} (swap! (.state this) add-event model song-id
+                                       skipped timestamp do-cand-update)]
+     (swap! (.state this) #(dissoc % :new-model))
+     (dbg "new-model" new-model)))
   ([this model song-id skipped timestamp]
    (.add_event this model song-id skipped timestamp true))
   ([this model song-id skipped]
@@ -367,14 +378,16 @@
 
 (defn -modelify
   ([song-model song-id]
-   (into {} (fn [{id-a "id_a" id-b "id_b" score "score"}]
-              [(if (= id-a id) id-b id-a)
-               score])))
+   (into {} (map (fn [{id-a "id_a" id-b "id_b" score "score"}]
+                   [(if (= id-a song-id) id-b id-a)
+                    score])
+                 song-model)))
   ([song-model song-id artist-model artist]
-   (merge (-modelify song_model song-id)
-          (into {} (fn [{artist-a "artist_a" artist-b "artist_b" score "score"}]
-                     [(if (= artist-a artist) artist-b artist-a)
-                      score])))))
+   (merge (-modelify song-model song-id)
+          (into {} (map (fn [{artist-a "artist_a" artist-b "artist_b" score "score"}]
+                          [(if (= artist-a artist) artist-b artist-a)
+                           score])
+                        artist-model)))))
 
 (defn -parse_top_tracks [response]
   (let [data (json/read-str response)]

@@ -18,14 +18,10 @@ import com.jacobobryant.moody.vanilla.PlaybackService;
 import com.jacobobryant.moody.vanilla.PrefKeys;
 import com.jacobobryant.moody.vanilla.Song;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,8 +42,6 @@ public class Moody {
     public static final String ACCOUNT = "moodyaccount";
     private Account newAccount;
     private reco rec;
-    public boolean next_on_blacklist = false;
-    private boolean was_random;
 
     private Moody() { }
 
@@ -114,31 +108,19 @@ public class Moody {
         rec = new reco(cursor_to_maps(result));
         result.close();
 
-        long last_event_id = -1;
-        try {
-            Log.d(C.TAG, "loading listening data from cache");
-            listener.update("loading listening history from cache");
-            FileInputStream fin = context.openFileInput(STATE_FILE);
-            ObjectInputStream ois = new ObjectInputStream(fin);
-            Map state = (Map)ois.readObject();
-            ois.close();
-            fin.close();
-            rec.set_state(state);
-            last_event_id = rec.get_last_event_id();
-        } catch (IOException | ClassNotFoundException e) { 
-            Log.e(C.TAG, "couldn't load cache");
-        }
+		SharedPreferences settings = PlaybackService.getSettings(context);
+        long last_event_in_model = settings.getLong(PrefKeys.LAST_EVENT_IN_MODEL, -1);
 
-        result = db.rawQuery("SELECT song_id, skipped, time, _id " +
-                "FROM events WHERE _id > ? ORDER BY time ASC",
-                new String[] {String.valueOf(last_event_id)});
-        Log.d(C.TAG, "reading " + result.getCount() + " skip events");
+        result = db.rawQuery("SELECT song_id, skipped, time, events._id, artist " +
+                "FROM events JOIN songs on song_id = songs._id WHERE events._id > ? ORDER BY time ASC",
+                new String[] {String.valueOf(last_event_in_model)});
+        Log.d(C.TAG, "reading " + result.getCount() + " events");
         if (result.getCount() > 0) {
             listener.update("analyzing listening history");
             // figure out which events are in the current session
             long event_time = System.currentTimeMillis() / 1000;
             long threshold = 60 * 20;  // 20 minutes
-            long first_id_in_session = -1;
+            long first_id_in_session = Long.MAX_VALUE;
             result.moveToPosition(result.getCount());
             while (result.moveToPrevious()) {
                 String time = result.getString(2);
@@ -165,6 +147,7 @@ public class Moody {
                 boolean skipped = (result.getInt(1) == 1);
                 String time = result.getString(2);
                 long id = result.getLong(3);
+                String artist = result.getString(4);
                 if (id == first_id_in_session) {
                     in_current_session = true;
                 }
@@ -173,8 +156,7 @@ public class Moody {
                     long seconds = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                         .parse(time).getTime() / 1000;
 
-                    rec.add_event(song_id, skipped, seconds, in_current_session);
-                    rec.set_last_event_id(id);
+                    add_event(song_id, skipped, seconds, in_current_session, artist);
                 } catch (ParseException pe) {
                     Log.e(C.TAG, "date couldn't be parsed");
                 }
@@ -182,22 +164,27 @@ public class Moody {
                         "read skip event #" + result.getPosition() +
                         ". in_current_session = " + in_current_session);
             }
-            //new SaveStateTask().execute(rec);
-            listener.update("saving recommendation model");
-            saveState(context, rec);
         }
         result.close();
         db.close();
         Log.d(C.TAG, "finished moody.init()");
     }
 
-    public void update(Song last_song, boolean skipped) {
-        if (next_on_blacklist) {
-            //rec.add_to_blacklist(new Metadata(last_song).toMap());
-            next_on_blacklist = false;
-            return;
+    public Map get_model(SQLiteDatabase db, long id, String artist) {
+        List song_model = cursor_to_maps(db.rawQuery(
+                    "select id_a, id_b, score from model where id_a = ?1 or id_b = ?1",
+                    new String[] {String.valueOf(id)}));
+        if (artist != null) {
+            List artist_model = cursor_to_maps(db.rawQuery(
+                        "select artist_a, artist_b, score from artist_model where artist_a = ?1 or artist_b = ?1",
+                        new String[] {artist}));
+            return rec.modelify(song_model, id, artist_model, artist);
+        } else {
+            return rec.modelify(song_model, id);
         }
+    }
 
+    public void update(Song last_song, boolean skipped) {
         // update db
         SQLiteDatabase db = new Database(context).getWritableDatabase();
         Metadata m = new Metadata(last_song);
@@ -206,31 +193,10 @@ public class Moody {
         if (result.getCount() > 0) {
             result.moveToPosition(0);
             int id = result.getInt(0);
-            int algorithm = (was_random) ? 0 : C.ALG_VERSION;
             db.execSQL("INSERT INTO events (song_id, skipped, algorithm) VALUES (?, ?, ?)",
                     new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
-                    String.valueOf(algorithm)});
-
-
-            List song_model = cursor_to_maps(db.rawQuery(
-                        "select id_a, id_b, score from model where id_a = ?1 or id_b = ?1",
-                        new String[] {String.valueOf(id)}));
-            Map model;
-            if (m.artist != null) {
-                List artist_model = cursor_to_maps(db.rawQuery(
-                            "select artist_a, artist_b, score from artist_model where artist_a = ?1 or artist_b = ?1",
-                            new String[] {m.artist}));
-                model = rec.modelify(song_model, artist_model);
-            } else {
-                model = rec.modelify(song_model);
-            }
-
-            db.beginTransaction();
-            for (Map new_model_part : rec.add_event(model, id, skipped)) {
-                update_model(new_model_part, db);
-            }
-            db.setTransactionSuccessful();
-            db.endTransaction();
+                    String.valueOf(C.ALG_VERSION)});
+            add_event(id, skipped, null, true, m.artist);
         } else {
             Log.e(C.TAG, "couldn't find song in database");
         }
@@ -238,9 +204,44 @@ public class Moody {
         db.close();
     }
 
+    private void add_event(long id, boolean skipped, Long seconds, boolean do_update, String artist) {
+        SQLiteDatabase db = new Database(context).getWritableDatabase();
+        Collection new_model;
+        if (seconds == null) {
+            new_model = rec.add_event(get_model(db, id, artist), id, skipped);
+        } else {
+            new_model = rec.add_event(get_model(db, id, artist), id, skipped, seconds, do_update);
+        }
+        if (new_model.size() > 0) {
+            db.beginTransaction();
+            for (Map new_model_part : (Collection<Map>)new_model) {
+                update_model(new_model_part, db);
+            }
+            long last_event = (long)cursor_to_maps(db.rawQuery(
+                        "select _id from events order by _id desc limit 2", null))
+                .get(1).get("_id");
+            SharedPreferences.Editor editor =
+                PlaybackService.getSettings(context).edit();
+            editor.putLong(PrefKeys.LAST_EVENT_IN_MODEL, last_event);
+            editor.commit();
+            db.setTransactionSuccessful();
+            db.endTransaction();
+        }
+        db.close();
+    }
+
     private void update_model(Map model_part, SQLiteDatabase db) {
-        double score = (double)model_part.get("score");
-        int n = (int)model_part.get("n");
+        if (model_part.get("song_a") == null || model_part.get("song_b") == null) {
+            return;
+        }
+
+        double score;
+        try {
+            score = (double)model_part.get("score");
+        } catch (ClassCastException e) {
+            score = new Double((long)model_part.get("score"));
+        }
+        long n = (long)model_part.get("n");
         try {
             String song_a = String.valueOf((int)model_part.get("song_a"));
             String song_b = String.valueOf((int)model_part.get("song_b"));
@@ -249,9 +250,9 @@ public class Moody {
             if (old_model.getCount() > 0) {
                 old_model.moveToPosition(0);
                 double old_score = old_model.getDouble(0);
-                int old_n = old_model.getInteger(1);
+                long old_n = old_model.getLong(1);
 
-                int new_n = old_n + n;
+                long new_n = old_n + n;
                 double new_score = (score * n + old_score * old_n) / new_n;
                 db.execSQL("update model set score = ?, n = ? where id_a = ? and id_b = ?",
                         new String[] {String.valueOf(new_score), String.valueOf(new_n),
@@ -269,9 +270,9 @@ public class Moody {
             if (old_model.getCount() > 0) {
                 old_model.moveToPosition(0);
                 double old_score = old_model.getDouble(0);
-                int old_n = old_model.getInteger(1);
+                long old_n = old_model.getLong(1);
 
-                int new_n = old_n + n;
+                long new_n = old_n + n;
                 double new_score = (score * n + old_score * old_n) / new_n;
                 db.execSQL("update artist_model set score = ?, n = ? where artist_a = ? and artist_b = ?",
                         new String[] {String.valueOf(new_score), String.valueOf(new_n),
@@ -284,12 +285,8 @@ public class Moody {
         }
     }
 
-
     public Metadata pick_next(boolean local_only) {
-        float CONTROL_PROB = 0.0f;
-        was_random = Math.random() < CONTROL_PROB;
-        Map ret = (was_random) ? rec.pick_random(local_only) :
-                                 rec.pick_next(local_only);
+        Map ret = rec.pick_next(local_only);
         return (ret == null) ? null : new Metadata(ret);
     }
 
@@ -376,36 +373,6 @@ public class Moody {
 
     public void add_to_blacklist(long id) {
         rec.add_to_blacklist(id);
-    }
-
-    private class SaveStateTask extends AsyncTask<reco, Void, Void> {
-        protected Void doInBackground(reco... rec) {
-            saveState(context, rec[0]);
-            return null;
-        }
-    }
-
-    public static void saveState(Context context, reco rec) {
-        try {
-            Log.d(C.TAG, "saving state");
-            FileOutputStream fout = context.openFileOutput(
-                    STATE_FILE, Context.MODE_PRIVATE);
-            ObjectOutputStream oos = new ObjectOutputStream(fout);
-            oos.writeObject(rec.get_state());
-            oos.close();
-            fout.close();
-        } catch (IOException e) {
-            Log.e(C.TAG, "couldn't save state");
-            try {
-                FileOutputStream fout = context.openFileOutput(
-                        STATE_FILE, Context.MODE_PRIVATE);
-                fout.write(null);
-                fout.close();
-            } catch (IOException e2) {
-                Log.e(C.TAG, "couldn't delete cache");
-            }
-        }
-        Log.d(C.TAG, "finished saving state");
     }
 
     public static class InitTask extends AsyncTask<Void, String, Void> {

@@ -74,4 +74,5 @@ public class PrefKeys {
 	public static final String USER_ID = "user_id";
     public static final String SPOTIFY_TOKEN = "spotify_token";
     public static final String SPOTIFY_TOKEN_EXPIRATION = "spotify_token_expiration";
+    public static final String LAST_EVENT_IN_MODEL = "last_event_in_model";
 }
