@@ -12,6 +12,7 @@
              [set_state [java.util.Map] void]
              [get_last_event_id [] long]
              [set_last_event_id [long] void]
+             [session_size [] int]
              ^:static [modelify [java.util.Collection long] java.util.Map]
              ^:static [modelify [java.util.Collection long java.util.Collection String] java.util.Map]
              ^:static [parse_top_tracks [String] java.util.List]
@@ -50,14 +51,6 @@
                       content-ratio content-n content-score])
 
 (defrecord Song [artist album title source spotify_id duration])
-                 ;danceability
-                 ;energy
-                 ;mode
-                 ;speechiness
-                 ;acousticness
-                 ;instrumentalness
-                 ;liveness
-                 ;valence])
 
 (defn dbg [desc arg]
   (when debug
@@ -140,49 +133,11 @@
       nil
       (* sim (if skipped -1 1)))))
 
-;(defn dot-product [vectors]
-;  (reduce + (apply map * vectors)))
-;
-;(defn norm [v]
-;  (Math/sqrt (reduce + (map #(* % %) v))))
-;
-;(defn cosine [vectors]
-;  (/ (dot-product vectors)
-;     (apply * (map norm vectors))))
-;
-;(defn feature-sim [library a b skipped]
-;  (let [features [:danceability
-;                  :energy
-;                  :mode
-;                  :speechiness
-;                  :acousticness
-;                  :instrumentalness
-;                  :liveness
-;                  :valence]
-;        vectors (map (fn [song-id]
-;                       (map (fn [feature] (get-in library [song-id feature]))
-;                            features))
-;                     [a b])
-;        distance (cosine vectors)
-;        sim (- (* distance 2) 1)]
-;    ;(println "feature distance between" (get-in library [a :title]) "and"
-;    ;         (get-in library [b :title]) "is" distance)
-;    (if (and skipped (< sim 0))
-;      nil
-;      (* sim (if skipped -1 1)))))
-
 (defn update-cand [[cand-id data] library model skipped]
   [cand-id
    (let [sim (sim-score model cand-id skipped)
          cand-artist (get-in library [cand-id :artist])
          content-sim (sim-score model cand-artist skipped)]
-                     ;(if (every? some? (map #(get-in library [% :mode])
-                     ;                       [cand-id other-id]))
-                     ;  (feature-sim library cand-id other-id skipped)
-                     ;  (let [s (sim-score model other-artist cand-artist skipped)]
-                     ;    (if s
-                     ;      (min s (if (= other-artist cand-artist) 1 0.8))
-                     ;      nil)))]
      (cond-> data
        sim (update-score :collaborative sim)
        content-sim (update-score :content content-sim)))])
@@ -233,25 +188,14 @@
                           :content-score 1)])
                 candidates)))
 
-;(defn update-model [model session library]
-;  (let [partial-model (mk-model session library)]
-;    (merge-with (fn [{score-a :score n-a :n} {score-b :score n-b :n}]
-;                  (Cell. (/ (+ (* score-a n-a) (* score-b n-b))
-;                            (+ n-a n-b))
-;                         (+ n-a n-b)))
-;                model partial-model)))
-
-
-
 (defn add-event [state model song-id skipped timestamp do-cand-update]
-  (dbg "add-event song-id" song-id)
   (let [time-delta (- timestamp (:last-time state))
         new-session (> time-delta ses-threshold)
         ; song id -1 represents the empty session. It gives the model
         ; something to work with when a session is just getting
         ; started.
         session (if new-session
-                  {-1 false song-id skipped}
+                  {song-id skipped}
                   (assoc (:session state) song-id skipped))]
 
     (when (< timestamp (:last-time state))
@@ -260,13 +204,12 @@
 
     (cond-> state
       true (assoc :last-time timestamp :session session)
-      true (update-in [:candidates song-id :event-vec]
-                      #(conj % (Event. (/ timestamp 86400) skipped)))
+      ;true (update-in [:candidates song-id :event-vec]
+      ;                #(conj % (Event. (/ timestamp 86400) skipped)))
       new-session (update :candidates reset-candidates)
-      new-session (update-candidates (walk/keywordize-keys model)
-                                     -1 false)
-      do-cand-update (update-candidates (walk/keywordize-keys model)
-                                        song-id skipped)
+      ;(and new-session do-cand-update) (update-candidates (walk/keywordize-keys model)
+      ;                                                    -1 false)
+      do-cand-update (update-candidates (walk/keywordize-keys model) skipped)
       true (assoc :new-model (if new-session
                                (walk/stringify-keys
                                  (mk-model (:session state)
@@ -283,25 +226,6 @@
    (.add_event this model song-id skipped timestamp true))
   ([this model song-id skipped]
    (.add_event this model song-id skipped (now))))
-
-;(defn init-model [this]
-;  (println "init model")
-;  (swap! (.state this)
-;         (fn [state]
-;           (let [[old-sessions cur-session]
-;                 (if (> ses-threshold (- (now) (:last-time state)))
-;                   [(rest (:sessions state)) (first (:sessions state))]
-;                   [(:sessions state) nil])
-;                 new-candidates
-;                 (loop [cands (reset-candidates (:candidates state))
-;                        session cur-session]
-;                   (if (empty? session)
-;                     cands
-;                     (let [[song-id skipped] (first session)]
-;                       (recur (update-candidates cands (:library state) new-model
-;                                                 song-id skipped)
-;                              (rest session)))))]
-;             (assoc state :model new-model :candidates new-candidates)))))
 
 (defn calc-confidence [n]
   (- 1 (/ 1 (Math/pow 1.5 n))))
@@ -347,8 +271,6 @@
         (assoc (library song-id) :_id song-id)))))
 
 (defn -pick_next [this local-only]
-  ;(when (not (:model @@this))
-  ;  (init-model this))
   (pick @@this local-only pick-with-algorithm))
 
 (defn -pick_random [this local-only]
@@ -387,6 +309,9 @@
                           [(if (= artist-a artist) artist-b artist-a)
                            score])
                         artist-model)))))
+
+(defn -session_size [this]
+  (count (:session @@this)))
 
 (defn -parse_top_tracks [response]
   (let [data (json/read-str response)]

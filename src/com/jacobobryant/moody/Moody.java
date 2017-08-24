@@ -106,13 +106,13 @@ public class Moody {
         rec = new reco(cursor_to_maps(
                     db.rawQuery("SELECT _id, artist, album, title, source, " +
                         "spotify_id, duration FROM songs", null)));
-                    
 
 		SharedPreferences settings = PlaybackService.getSettings(context);
-        long last_event_in_model = -1;  //settings.getLong(PrefKeys.LAST_EVENT_IN_MODEL, -1);
-        db.execSQL("DELETE FROM model");  // lololol
-        db.execSQL("DELETE FROM artist_model");
+        long last_event_in_model = settings.getLong(PrefKeys.LAST_EVENT_IN_MODEL, -1);
         Log.d(C.TAG, "last_event_in_model: " + last_event_in_model);
+        //long last_event_in_model = -1;
+        //db.execSQL("DELETE FROM model");  // lololol
+        //db.execSQL("DELETE FROM artist_model");
 
         result = db.rawQuery("SELECT song_id, skipped, time, events._id, artist " +
                 "FROM events JOIN songs on song_id = songs._id WHERE events._id > ? ORDER BY time ASC",
@@ -233,6 +233,13 @@ public class Moody {
             editor.commit();
             db.setTransactionSuccessful();
             db.endTransaction();
+        }
+        if (rec.session_size() == 1) {
+            if (seconds == null) {
+                rec.add_event(get_model(db, -1, null), -1, false);
+            } else {
+                rec.add_event(get_model(db, -1, null), -1, false, seconds, do_update);
+            }
         }
         db.close();
     }
