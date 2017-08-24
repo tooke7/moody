@@ -105,7 +105,7 @@ public class Moody {
         SQLiteDatabase db = new Database(context).getReadableDatabase();
         rec = new reco(cursor_to_maps(
                     db.rawQuery("SELECT _id, artist, album, title, source, " +
-                        "spotify_id, duration FROM songs", null)));
+                        "spotify_id, duration, mem_strength FROM songs", null)));
 
 		SharedPreferences settings = PlaybackService.getSettings(context);
         long last_event_in_model = settings.getLong(PrefKeys.LAST_EVENT_IN_MODEL, -1);
@@ -200,6 +200,7 @@ public class Moody {
                     new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
                     String.valueOf(C.ALG_VERSION)});
             add_event(id, null, skipped, null, true, m.artist);
+            update_strength(id);
         } else {
             Log.e(C.TAG, "couldn't find song in database");
         }
@@ -241,6 +242,16 @@ public class Moody {
                 rec.add_event(get_model(db, -1, null), -1, false, seconds, do_update);
             }
         }
+        db.close();
+    }
+
+    private void update_strength(int song_id) {
+        SQLiteDatabase db = new Database(context).getWritableDatabase();
+        double strength = rec.calc_strength(song_id, cursor_to_maps(db.rawQuery(
+                        "select time, skipped from events where song_id = ?",
+                        new String[] {String.valueOf(song_id)})));
+        db.execSQL("update songs set mem_strength =  ? where song_id = ?",
+                new String[] {String.valueOf(strength), String.valueOf(song_id)});
         db.close();
     }
 

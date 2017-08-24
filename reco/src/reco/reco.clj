@@ -50,7 +50,7 @@
                       ratio n score
                       content-ratio content-n content-score])
 
-(defrecord Song [artist album title source spotify_id duration])
+(defrecord Song [artist album title source spotify_id duration mem_strength])
 
 (defn dbg [desc arg]
   (when debug
@@ -162,23 +162,23 @@
 
 ;(def strength-set [0.2 0.5 1 1.5 2 3 5 8 13 21])
 (def strength-set [0.5 3 14])
-(defn calc-freshness [event-vec]
-  1)
-;  (let [get-deltas (fn [i event] {:observed (if (:skipped event) 0 1)
-;                                  :deltas (map #(- (:day event) (:day %))
-;                                               (take i event-vec))})
-;        input-data (map-indexed get-deltas event-vec)
-;        strength (apply min-key #(total-error input-data %) strength-set)
-;        day (/ (now) 86400)
-;        deltas (map (fn [e] (max (- day (:day e)) 0)) event-vec)]
-;    (predicted deltas strength)))
+(defn calc-freshness [strength event-vec]
+  (let [;get-deltas (fn [i event] {:observed (if (:skipped event) 0 1)
+        ;                          :deltas (map #(- (:day event) (:day %))
+        ;                                       (take i event-vec))})
+        ;input-data (map-indexed get-deltas event-vec)
+        ;strength (apply min-key #(total-error input-data %) strength-set)
+        day (/ (now) 86400)
+        deltas (map (fn [e] (max (- day (:day e)) 0)) event-vec)]
+    (predicted deltas strength)))
 
 ; TODO refactor
-(defn reset-candidates [candidates]
+(defn reset-candidates [candidates library]
   (into {} (map (fn [[song-id data]]
                   [song-id
                    (assoc data
-                          :freshness (calc-freshness
+                          :freshness (calc-freshness 
+                                       (get-in library [song-id :mem_strength] 3)
                                        (sort-by :day (:event-vec data)))
                           :ratio 0
                           :n 0

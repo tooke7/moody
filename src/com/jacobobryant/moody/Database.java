@@ -5,7 +5,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
 public class Database extends SQLiteOpenHelper {
-    public static final int VERSION = 6;
+    public static final int VERSION = 7;
     public static final String FILE = "moody.db";
     public static final String MODEL_SQL =
         "create table model (" +
@@ -37,6 +37,7 @@ public class Database extends SQLiteOpenHelper {
                    "album            TEXT, " +
                    "duration         INTEGER, " +
                    "source           TEXT, " +
+                   "mem_strength     REAL, " +
                    "spotify_id       TEXT, " +
                    "danceability     REAL, " +
                    "energy           REAL, " +
@@ -99,6 +100,9 @@ public class Database extends SQLiteOpenHelper {
             oldVersion++;
             db.execSQL(MODEL_SQL);
             db.execSQL(ARTIST_MODEL_SQL);
+        }
+        if (oldVersion == 6) {
+            db.execSQL("ALTER TABLE songs ADD COLUMN mem_strength REAL");
         }
     }
 }
