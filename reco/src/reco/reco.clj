@@ -313,9 +313,9 @@
                                          (event-deltas cand-id)
                                          (get strength cand-id 3)))])))))))
 
-;(def strength-set [0.2 0.5 1 1.5 2 3 5 8 13 21])
 (defrecord Event [day skipped])
-(def strength-set [0.5 3 14])
+(def strength-set [0.2 0.5 1 1.5 2 3 5 8 13 21])
+;(def strength-set [0.5 3 14])
 (defn -calc_strength [raw-events]
   (let [event-vec (map #(Event. (/ (parse-timestamp (get % "time"))
                                    86400)

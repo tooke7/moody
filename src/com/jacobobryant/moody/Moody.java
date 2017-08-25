@@ -99,12 +99,12 @@ public class Moody {
         add_to_library(context, songs);
         result.close();
 
-        SQLiteDatabase db = new Database(context).getReadableDatabase();
+        SQLiteDatabase db = new Database(context).getWritableDatabase();
         // update all strengths
         //listener.update("updating memory strengths");
         //for (Map<String, Object> record : cursor_to_maps(db.rawQuery(
         //        "select distinct song_id from events", null))) {
-        //    update_strength((int)record.get("song_id"));
+        //    update_strength((int)record.get("song_id"), db);
         //}
 
         // get library
@@ -206,7 +206,7 @@ public class Moody {
                     new String[]{String.valueOf(id), String.valueOf(skipped ? 1 : 0),
                     String.valueOf(C.ALG_VERSION)});
             add_event(id, null, skipped, null, true, m.artist);
-            update_strength(id);
+            update_strength(id, db);
         } else {
             Log.e(C.TAG, "couldn't find song in database");
         }
@@ -257,14 +257,12 @@ public class Moody {
         db.close();
     }
 
-    private void update_strength(int song_id) {
-        SQLiteDatabase db = new Database(context).getWritableDatabase();
+    private void update_strength(int song_id, SQLiteDatabase db) {
         double strength = rec.calc_strength(cursor_to_maps(db.rawQuery(
                         "select time, skipped from events where song_id = ?",
                         new String[] {String.valueOf(song_id)})));
         db.execSQL("update songs set mem_strength = ? where _id = ?",
                 new String[] {String.valueOf(strength), String.valueOf(song_id)});
-        db.close();
     }
 
     private void update_model(Map model_part, SQLiteDatabase db) {
