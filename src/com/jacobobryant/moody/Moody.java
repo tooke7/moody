@@ -34,7 +34,6 @@ import static android.database.Cursor.FIELD_TYPE_INTEGER;
 import static android.database.Cursor.FIELD_TYPE_STRING;
 
 public class Moody {
-    public static final String STATE_FILE = "reco_state";
     private static Moody instance;
     private Context context;
     public static final String AUTHORITY = "com.jacobobryant.moody.vanilla";
@@ -100,9 +99,16 @@ public class Moody {
         add_to_library(context, songs);
         result.close();
 
+        SQLiteDatabase db = new Database(context).getReadableDatabase();
+        // update all strengths
+        //listener.update("updating memory strengths");
+        //for (Map<String, Object> record : cursor_to_maps(db.rawQuery(
+        //        "select distinct song_id from events", null))) {
+        //    update_strength((int)record.get("song_id"));
+        //}
+
         // get library
         listener.update("setting up recommendation engine");
-        SQLiteDatabase db = new Database(context).getReadableDatabase();
         rec = new reco(cursor_to_maps(
                     db.rawQuery("SELECT _id, artist, album, title, source, " +
                         "spotify_id, duration, mem_strength FROM songs", null)));
@@ -181,9 +187,9 @@ public class Moody {
             List artist_model = cursor_to_maps(db.rawQuery(
                         "select artist_a, artist_b, score from artist_model where artist_a = ?1 or artist_b = ?1",
                         new String[] {artist}));
-            return rec.modelify(song_model, id, artist_model, artist);
+            return reco.modelify(song_model, id, artist_model, artist);
         } else {
-            return rec.modelify(song_model, id);
+            return reco.modelify(song_model, id);
         }
     }
 
@@ -241,16 +247,22 @@ public class Moody {
             } else {
                 rec.add_event(get_model(db, -1, null), -1, false, seconds, do_update);
             }
+            Log.d(C.TAG, "updating freshness");
+            rec.update_freshness(cursor_to_maps(db.rawQuery(
+                    "select song_id, time from events", null)),
+                    cursor_to_maps(db.rawQuery(
+                            "select mem_strength, _id from songs where mem_strength is not null",
+                            null)));
         }
         db.close();
     }
 
     private void update_strength(int song_id) {
         SQLiteDatabase db = new Database(context).getWritableDatabase();
-        double strength = rec.calc_strength(song_id, cursor_to_maps(db.rawQuery(
+        double strength = rec.calc_strength(cursor_to_maps(db.rawQuery(
                         "select time, skipped from events where song_id = ?",
                         new String[] {String.valueOf(song_id)})));
-        db.execSQL("update songs set mem_strength =  ? where song_id = ?",
+        db.execSQL("update songs set mem_strength = ? where _id = ?",
                 new String[] {String.valueOf(strength), String.valueOf(song_id)});
         db.close();
     }
