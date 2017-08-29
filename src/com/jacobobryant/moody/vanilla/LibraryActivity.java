@@ -57,7 +57,6 @@ import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.SearchView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.jacobobryant.moody.C;
 import com.jacobobryant.moody.Moody;
@@ -74,6 +73,8 @@ import java.util.Map;
 import java.util.Set;
 
 import ch.blinkenlights.android.medialibrary.MediaLibrary;
+
+import static com.jacobobryant.moody.vanilla.PlaybackService.FLAG_PLAYING;
 
 /**
  * The library activity where songs to play can be selected from the library.
@@ -503,6 +504,19 @@ public class LibraryActivity
 	{
 		long id = intent.getLongExtra("id", LibraryAdapter.INVALID_ID);
 
+        if (id < 0) {
+            id = id * -1 - 1;
+            Log.d(C.TAG, "clicked on a spotify song");
+
+            PlaybackService service = PlaybackService.get(this);
+            if (service.mTimeline.addSpotifySong(id)) {
+                service.setFlag(PlaybackService.FLAG_PLAYING);
+                service.setCurrentSong(0, true);
+                Log.d(C.TAG, "finished pickSongs (spotify)");
+                return;
+            }
+        }
+
 		boolean all = false;
 		int mode = action;
 		if (action == ACTION_PLAY_ALL || action == ACTION_ENQUEUE_ALL) {
@@ -530,6 +544,7 @@ public class LibraryActivity
 			mLastAction = action;
 			updateHeaders();
 		}
+        Log.d(C.TAG, "finished pickSongs");
 	}
 
 	/**
@@ -583,7 +598,7 @@ public class LibraryActivity
 				// be expanded
 				action = ACTION_PLAY;
 			} else if (action == ACTION_PLAY_OR_ENQUEUE) {
-				action = (mState & PlaybackService.FLAG_PLAYING) == 0 ? ACTION_PLAY : ACTION_ENQUEUE;
+				action = (mState & FLAG_PLAYING) == 0 ? ACTION_PLAY : ACTION_ENQUEUE;
 			}
 			pickSongs(rowData, action);
 		}

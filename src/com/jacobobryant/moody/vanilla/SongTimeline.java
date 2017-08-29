@@ -26,10 +26,12 @@ package com.jacobobryant.moody.vanilla;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.StrictMode;
 import android.util.Log;
 
 import com.jacobobryant.moody.C;
+import com.jacobobryant.moody.Database;
 import com.jacobobryant.moody.Metadata;
 import com.jacobobryant.moody.Moody;
 
@@ -54,6 +56,8 @@ import java.util.Map;
 
 import ch.blinkenlights.android.medialibrary.MediaLibrary;
 import reco.reco;
+
+import static com.jacobobryant.moody.Moody.cursor_to_maps;
 
 /**
  * Contains the list of currently playing songs, implements repeat and shuffle
@@ -622,6 +626,26 @@ public final class SongTimeline {
 
 		return song;
 	}
+
+    public boolean addSpotifySong(long id) {
+        try {
+            SQLiteDatabase db = new Database(mContext).getReadableDatabase();
+            Metadata next = new Metadata(cursor_to_maps(db.rawQuery(
+                            "select * from songs where _id = ?",
+                            new String[] {String.valueOf(id)})).get(0));
+            db.close();
+            get_metadata(next.spotify_id);
+            Song song = next.toSong();
+            Log.d(C.TAG, "duration: " + song.duration);
+            mSongs.add(mCurrentPos, song);
+            broadcastChangedSongs();
+            changed();
+            return true;
+        } catch (IOException e) {
+            Log.w(C.TAG, "no network", e);
+            return false;
+        }
+    }
 
 	/**
 	 * Internal implementation for shiftCurrentSong. Does all the work except

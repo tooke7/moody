@@ -23,12 +23,13 @@
 
 package com.jacobobryant.moody.vanilla;
 
-import ch.blinkenlights.android.medialibrary.MediaLibrary;
-
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
+import android.database.MatrixCursor;
+import android.database.MergeCursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Color;
 import android.provider.BaseColumns;
 import android.provider.MediaStore;
@@ -41,11 +42,14 @@ import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.SectionIndexer;
 
+import com.jacobobryant.moody.Database;
+
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
-import java.util.ArrayList;
-import java.lang.StringBuilder;
+
+import ch.blinkenlights.android.medialibrary.MediaLibrary;
 
 /**
  * MediaAdapter provides an adapter backed by a MediaStore content provider.
@@ -374,7 +378,31 @@ public class MediaAdapter
 	@Override
 	public Cursor query()
 	{
-		return buildQuery(mProjection, false).runQuery(mContext);
+        Cursor query = buildQuery(mProjection, false).runQuery(mContext);
+
+        // insert spotify songs
+        if (mType == MediaUtils.TYPE_SONG) {
+            MatrixCursor c = new MatrixCursor(new String[] {BaseColumns._ID,
+                MediaStore.Audio.Albums.ALBUM_ID, MediaLibrary.SongColumns.TITLE,
+                MediaLibrary.AlbumColumns.ALBUM, MediaLibrary.ContributorColumns.ARTIST});
+            SQLiteDatabase db = new Database(mContext).getReadableDatabase();
+            Cursor result = db.rawQuery("select _id, title, album, artist from songs " +
+                    "where source = \"spotify\" order by title", null);
+            result.moveToPosition(-1);
+            while (result.moveToNext()) {
+                c.addRow(new Object[] {
+                            (result.getLong(0) + 1) * -1,
+                            null,
+                            result.getString(1),
+                            result.getString(2),
+                            result.getString(3)});
+            }
+            result.close();
+            db.close();
+            query = new MergeCursor(new Cursor[] {c, query});
+        }
+
+        return query;
 	}
 
 	@Override

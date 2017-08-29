@@ -23,8 +23,6 @@
 
 package com.jacobobryant.moody.vanilla;
 
-import ch.blinkenlights.android.medialibrary.MediaLibrary;
-
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -61,13 +59,16 @@ import android.view.View;
 import android.widget.RemoteViews;
 import android.widget.Toast;
 
-import java.lang.Math;
+import com.jacobobryant.moody.C;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+
+import ch.blinkenlights.android.medialibrary.MediaLibrary;
 
 
 /**
@@ -433,6 +434,7 @@ public final class PlaybackService extends Service
 		int state = loadState();
 
 		mMediaPlayer = getNewMediaPlayer();
+        Log.d(C.TAG, "finished initializing mMediaPlayer");
 		//mPreparedMediaPlayer = getNewMediaPlayer();
 		// We only have a single audio session
 		//mPreparedMediaPlayer.setAudioSessionId(mMediaPlayer.getAudioSessionId());
@@ -954,8 +956,10 @@ public final class PlaybackService extends Service
 	 */
 	private int updateState(int state)
 	{
-		if ((state & (FLAG_NO_MEDIA|FLAG_ERROR|FLAG_EMPTY_QUEUE)) != 0 || mHeadsetOnly && isSpeakerOn())
+		if ((state & (FLAG_NO_MEDIA|FLAG_ERROR|FLAG_EMPTY_QUEUE)) != 0 || mHeadsetOnly && isSpeakerOn()) {
+            Log.d(C.TAG, "updateState: clearing FLAG_PLAYING");
 			state &= ~FLAG_PLAYING;
+        }
 
 		int oldState = mState;
 		mState = state;
@@ -1288,16 +1292,21 @@ public final class PlaybackService extends Service
 	 * broadcasts, etc.
 	 * @return The new current song
 	 */
-	private Song setCurrentSong(int delta, boolean skipped)
+	Song setCurrentSong(int delta, boolean skipped)
 	{
-		if (mMediaPlayer == null)
+		if (mMediaPlayer == null) {
+            Log.d(C.TAG, "mMediaPlayer is null");
 			return null;
+        }
 
 		if (mMediaPlayer.isPlaying())
 			mMediaPlayer.stop();
 
 		Song song = mTimeline.shiftCurrentSong(delta, skipped);
 		mCurrentSong = song;
+        if (song != null) {
+            Log.d(C.TAG, "setCurrentSong: " + song.title);
+        }
 		if (song == null) {
 			if (MediaUtils.isSongAvailable(getApplicationContext())) {
 				int flag = finishAction(mState) == SongTimeline.FINISH_RANDOM ? FLAG_ERROR : FLAG_EMPTY_QUEUE;
@@ -1330,6 +1339,7 @@ public final class PlaybackService extends Service
 	{
 		/* Save our 'current' state as the try block may set the ERROR flag (which clears the PLAYING flag */
 		boolean playing = (mState & FLAG_PLAYING) != 0;
+        Log.d(C.TAG, "processSong playing: " + playing);
 
 		try {
 			mMediaPlayerInitialized = false;
@@ -1344,6 +1354,7 @@ public final class PlaybackService extends Service
 			//	mPreparedMediaPlayer = tmpPlayer; // this was mMediaPlayer and is in reset() state
 			//}
 			//else {
+            Log.d(C.TAG, "processSong song.path: " + song.path);
 				prepareMediaPlayer(mMediaPlayer, song.path);
 			//}
 
@@ -1357,8 +1368,13 @@ public final class PlaybackService extends Service
 				mPendingSeek = 0;
 			}
 
-			if ((mState & FLAG_PLAYING) != 0)
+
+			if ((mState & FLAG_PLAYING) != 0) {
+                Log.d(C.TAG, "starting media player");
 				mMediaPlayer.start();
+            } else {
+                Log.d(C.TAG, "not starting media player");
+            }
 
 			if ((mState & FLAG_ERROR) != 0) {
 				mErrorMessage = null;
@@ -1757,8 +1773,10 @@ public final class PlaybackService extends Service
 		case SongTimeline.MODE_PLAY_POS_FIRST:
 		case SongTimeline.MODE_PLAY_ID_FIRST:
 			text = R.plurals.playing;
-			if (count != 0 && (mState & FLAG_PLAYING) == 0)
+			if (count != 0 && (mState & FLAG_PLAYING) == 0) {
+                Log.d(C.TAG, "runQuery setting FLAG_PLAYING");
 				setFlag(FLAG_PLAYING);
+            }
 			break;
 		case SongTimeline.MODE_FLUSH_AND_PLAY_NEXT:
 		case SongTimeline.MODE_ENQUEUE:

@@ -310,6 +310,7 @@ public class VanillaMediaPlayer extends MediaPlayer {
             }
             super.start();
         }
+        Log.d(C.TAG, "finished VanillaMediaPlayer.start()");
     }
 
     public void resume() {
