@@ -211,11 +211,8 @@ public class LibraryActivity
 		mBottomBarControls.setOnQueryTextListener(this);
 		mBottomBarControls.enableOptionsMenu(this);
 
-		boolean init_moody = false;
 		if(PermissionRequestActivity.havePermissions(this) == false) {
 			PermissionRequestActivity.showWarning(this, getIntent());
-		} else {
-			init_moody = true;
 		}
 
 		mVanillaTabLayout = (VanillaTabLayout)findViewById(R.id.sliding_tabs);
@@ -230,31 +227,6 @@ public class LibraryActivity
 		loadAlbumIntent(getIntent());
 		bindControlButtons();
 
-		if (init_moody) {
-			//new Thread() {
-			//	public void run() {
-					//Moody.getInstance(LibraryActivity.this);
-		//		}
-		//	}.start();
-
-            // spotify stuff
-            if (Moody.spotify_token_expired(this)) {
-                Log.d(C.TAG, "refreshing spotify token");
-                AuthenticationRequest.Builder builder =
-                        new AuthenticationRequest.Builder(C.CLIENT_ID,
-                        AuthenticationResponse.Type.TOKEN, C.REDIRECT_URI);
-                builder.setScopes(new String[]{"user-read-private", "streaming",
-                        "user-top-read"});
-                AuthenticationRequest request = builder.build();
-                AuthenticationClient.openLoginActivity(this, 666, request);
-            } else {
-                Log.d(C.TAG, "spotify token is still valid");
-                Log.d(C.TAG, "token: " + settings.getString(PrefKeys.SPOTIFY_TOKEN, null));
-                new Moody.InitTask(this).execute();
-            }
-		}
-
-        Log.d(C.TAG, "finished LibraryActivity.onCreate()");
 	}
 
     @Override
@@ -274,7 +246,7 @@ public class LibraryActivity
                         .commit();
                     break;
                 case ERROR:
-                    Log.e(C.TAG, "Spotify auth error: " + response.getError());
+                    Log.e(C.TAG, "Uh oh, Spotify auth error: " + response.getError());
                     break;
                 default:
                     break;
@@ -343,6 +315,23 @@ public class LibraryActivity
 	public void onResume() {
 		super.onResume();
 		registerReceiver(mPluginInfoReceiver, new IntentFilter(PluginUtils.ACTION_HANDLE_PLUGIN_PARAMS));
+
+		if (PermissionRequestActivity.havePermissions(this)) {
+            if (Moody.spotify_token_expired(this)) {
+                Log.d(C.TAG, "refreshing spotify token");
+                AuthenticationRequest.Builder builder =
+                        new AuthenticationRequest.Builder(C.CLIENT_ID,
+                        AuthenticationResponse.Type.TOKEN, C.REDIRECT_URI);
+                builder.setScopes(new String[]{"user-read-private", "streaming",
+                        "user-top-read"});
+                AuthenticationRequest request = builder.build();
+                AuthenticationClient.openLoginActivity(this, 666, request);
+            } else {
+                Log.d(C.TAG, "spotify token is still valid");
+                new Moody.InitTask(this).execute();
+            }
+        }
+        Log.d(C.TAG, "finished LibraryActivity.onResume()");
 	}
 
 	@Override
