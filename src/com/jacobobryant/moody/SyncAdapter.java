@@ -75,8 +75,8 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
             Log.d(C.TAG, "onPerformSync()");
             syncDb(context);
             getSpotifySongs(context);
-            getSpotifyIds(context);
-            getSpotifyFeatures(context);
+            //getSpotifyIds(context);
+            //getSpotifyFeatures(context);
         } catch (Exception e) {
             //ACRA.getErrorReporter().handleException(e);
             Log.e(C.TAG, "couldn't finish sync stuff", e);
@@ -125,7 +125,7 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         }
     }
 
-    public void getSpotifySongs(Context context) throws IOException {
+    public static void getSpotifySongs(Context context) throws IOException {
         // get spotify songs
         if (Moody.spotify_token_expired(context)) {
             return;
@@ -153,7 +153,7 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         Log.d(C.TAG, "finished spotify thang");
     }
 
-    public void getSpotifyIds(Context context) throws IOException {
+    public static void getSpotifyIds(Context context) throws IOException {
         if (Moody.spotify_token_expired(context)) {
             return;
         }
@@ -214,7 +214,7 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         Log.d(C.TAG, "finished getSpotifyIds()");
     }
 
-    private String get_search_query(String artist, String album, String title)
+    private static String get_search_query(String artist, String album, String title)
             throws UnsupportedEncodingException, MalformedURLException {
         StringBuilder query = new StringBuilder();
         query.append("https://api.spotify.com/v1/search?type=track&q=");
@@ -231,7 +231,7 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         return query.toString();
     }
 
-    private class GetIdTask extends AsyncTask<Void, Void, Void> {
+    private static class GetIdTask extends AsyncTask<Void, Void, Void> {
         private URL url;
         private String token;
         private int row_id;

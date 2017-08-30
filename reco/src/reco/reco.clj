@@ -14,6 +14,7 @@
              [set_last_event_id [long] void]
              [session_size [] int]
              [update_freshness [java.util.Collection java.util.Collection] void]
+             [refresh_candidates [java.util.Collection] boolean]
              ^:static [calc_strength [java.util.Collection] double]
              ^:static [modelify [java.util.Collection long] java.util.Map]
              ^:static [modelify [java.util.Collection long java.util.Collection String] java.util.Map]
@@ -326,6 +327,17 @@
                                                (take i event-vec))})
         input-data (map-indexed get-deltas event-vec)]
     (apply min-key #(total-error input-data %) strength-set)))
+
+(defn -refresh_candidates [this library]
+  (println "refreshing candidates")
+  (let [candidates (into {} (map (fn [song] [(get song "_id")
+                                             (Candidate. 1 0 0 0 1 1 1)])
+                                 library))
+        old-count (count (:candidates @@this))]
+    (swap! (.state this)
+           (fn [state]
+             (update state :candidates #(merge candidates %))))
+    (> (count (:candidates @@this)) old-count)))
 
 (defn -parse_top_tracks [response]
   (let [data (json/read-str response)]

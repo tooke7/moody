@@ -244,6 +244,13 @@ public class LibraryActivity
                         .putLong(PrefKeys.SPOTIFY_TOKEN_EXPIRATION,
                                 response.getExpiresIn() + System.currentTimeMillis() / 1000)
                         .commit();
+                    new Moody.SpotifyTask(this, new Moody.NaviListener() {
+                        @Override
+                        public void hey_listen() {
+                            LibraryActivity.this.finish();
+                            LibraryActivity.this.startActivity(LibraryActivity.this.getIntent());
+                        }
+                    }).execute();
                     break;
                 case ERROR:
                     Log.e(C.TAG, "Uh oh, Spotify auth error: " + response.getError());
@@ -317,7 +324,8 @@ public class LibraryActivity
 		registerReceiver(mPluginInfoReceiver, new IntentFilter(PluginUtils.ACTION_HANDLE_PLUGIN_PARAMS));
 
 		if (PermissionRequestActivity.havePermissions(this)) {
-            if (Moody.spotify_token_expired(this)) {
+            Log.d(C.TAG, "got permission");
+            if (Moody.wants_spotify(this) && Moody.spotify_token_expired(this)) {
                 Log.d(C.TAG, "refreshing spotify token");
                 AuthenticationRequest.Builder builder =
                         new AuthenticationRequest.Builder(C.CLIENT_ID,
@@ -326,10 +334,39 @@ public class LibraryActivity
                         "user-top-read"});
                 AuthenticationRequest request = builder.build();
                 AuthenticationClient.openLoginActivity(this, 666, request);
+            } else if (!Moody.already_asked_about_spotify(this)) {
+                Log.d(C.TAG, "doing that alert thang");
+                AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                builder.setMessage("Do you have a Spotify premium account?")
+                    .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            Moody.set_already_asked(LibraryActivity.this);
+                            Moody.wants_spotify(LibraryActivity.this, true);
+                            Log.d(C.TAG, "getting spotify token");
+                            AuthenticationRequest.Builder builder =
+                                new AuthenticationRequest.Builder(C.CLIENT_ID,
+                                        AuthenticationResponse.Type.TOKEN, C.REDIRECT_URI);
+                            builder.setScopes(new String[]{"user-read-private", "streaming",
+                                "user-top-read"});
+                            AuthenticationRequest request = builder.build();
+                            AuthenticationClient.openLoginActivity(LibraryActivity.this, 666, request);
+                        }
+                    })
+                .setNegativeButton("No", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        Moody.set_already_asked(LibraryActivity.this);
+                        Moody.wants_spotify(LibraryActivity.this, false);
+                        new Moody.InitTask(LibraryActivity.this).execute();
+                    }
+                });
+                AlertDialog dialog = builder.create();
+                dialog.show();
             } else {
                 Log.d(C.TAG, "spotify token is still valid");
                 new Moody.InitTask(this).execute();
             }
+        } else {
+            Log.d(C.TAG, "no permissions");
         }
         Log.d(C.TAG, "finished LibraryActivity.onResume()");
 	}
@@ -900,8 +937,10 @@ public class LibraryActivity
 		menu.add(0, MENU_SORT, 30, R.string.sort_by).setIcon(R.drawable.ic_menu_sort_alphabetically);
 		if (BuildConfig.DEBUG) {
             menu.add(0, MENU_MOOD, 0, "New session");
-			menu.add(0, MENU_TEST, 0, "Test");
+			//menu.add(0, MENU_TEST, 0, "Test");
 		}
+        String title = (Moody.wants_spotify(this)) ? "Disable Spotify" : "Login to Spotify";
+        menu.add(0, MENU_TEST, 0, title);
 		return true;
 	}
 
@@ -918,8 +957,21 @@ public class LibraryActivity
 	{
 		switch (item.getItemId()) {
         case MENU_TEST:
-            Intent intent = new Intent(this, SpotifyActivity.class);
-            startActivity(intent);
+            Moody.set_already_asked(this);
+            boolean wants = !Moody.wants_spotify(this);
+            Moody.wants_spotify(this, wants);
+            if (wants) {
+                Moody.wants_spotify(this, true);
+                Log.d(C.TAG, "getting spotify token");
+                AuthenticationRequest.Builder bob_builder =
+                    new AuthenticationRequest.Builder(C.CLIENT_ID,
+                            AuthenticationResponse.Type.TOKEN, C.REDIRECT_URI);
+                bob_builder.setScopes(new String[]{"user-read-private", "streaming",
+                    "user-top-read"});
+                AuthenticationRequest request = bob_builder.build();
+                AuthenticationClient.openLoginActivity(LibraryActivity.this, 666, request);
+            }
+            return true;
         case MENU_MOOD:
             //Moody.getInstance(this).rec.new_session();
             //final String[] moods = new String[] { "mood 1", "mood 2", "mood 3",

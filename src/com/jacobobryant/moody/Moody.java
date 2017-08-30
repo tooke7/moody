@@ -18,6 +18,7 @@ import com.jacobobryant.moody.vanilla.PlaybackService;
 import com.jacobobryant.moody.vanilla.PrefKeys;
 import com.jacobobryant.moody.vanilla.Song;
 
+import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -44,7 +45,7 @@ public class Moody {
 
     private Moody() { }
 
-    public static Moody getInstance(Context context,
+    public synchronized static Moody getInstance(Context context,
             InitProgressListener listener) {
         if (instance == null) {
             Log.d(C.TAG, "package name:" + context.getPackageName());
@@ -55,7 +56,7 @@ public class Moody {
         return instance;
     }
 
-    public static Moody getInstance(Context context) {
+    public synchronized static Moody getInstance(Context context) {
         return getInstance(context, new InitProgressListener() {
             @Override
             public void update(String s) { }
@@ -177,6 +178,15 @@ public class Moody {
         result.close();
         db.close();
         Log.d(C.TAG, "finished moody.init()");
+    }
+
+    public boolean refresh_candidates() {
+        SQLiteDatabase db = new Database(context).getReadableDatabase();
+        boolean ret = rec.refresh_candidates(cursor_to_maps(
+                    db.rawQuery("SELECT _id, artist, album, title, source, " +
+                        "spotify_id, duration, mem_strength FROM songs", null)));
+        db.close();
+        return ret;
     }
 
     public Map get_model(SQLiteDatabase db, long id, String artist) {
@@ -326,12 +336,14 @@ public class Moody {
     public static void add_to_library(Context c, List<Metadata> songs) {
         SQLiteDatabase db = new Database(c).getWritableDatabase();
         db.beginTransaction();
+        int count = 0;
         for (Metadata s : songs) {
             String query = "select _id, source from songs where " + match_clause(s);
             Cursor result = db.rawQuery(query, s.query());
 
             result.moveToFirst();
             if (result.getCount() == 0) {
+                count++;
                 db.execSQL("INSERT INTO songs (artist, album, title, duration, source, spotify_id) " +
                         "VALUES (?, ?, ?, ?, ?, ?)",
                         new String[] {s.artist, s.album, s.title, String.valueOf(s.duration),
@@ -346,6 +358,7 @@ public class Moody {
         db.setTransactionSuccessful();
         db.endTransaction();
         db.close();
+        Log.d(C.TAG, "added " + count + " songs to library");
     }
 
     private static String match_clause(Metadata s) {
@@ -406,8 +419,76 @@ public class Moody {
             settings.getLong(PrefKeys.SPOTIFY_TOKEN_EXPIRATION, 0);
     }
 
+    public static boolean wants_spotify(Context context) {
+		SharedPreferences settings = PlaybackService.getSettings(context);
+        return settings.getBoolean(PrefKeys.WANTS_SPOTIFY, false);
+    }
+
+    public static boolean already_asked_about_spotify(Context context) {
+		SharedPreferences settings = PlaybackService.getSettings(context);
+        return settings.getBoolean(PrefKeys.ALREADY_ASKED, false);
+    }
+
+    public static void set_already_asked(Context context) {
+        SharedPreferences.Editor editor =
+            PlaybackService.getSettings(context).edit();
+        editor.putBoolean(PrefKeys.ALREADY_ASKED, true);
+        editor.commit();
+    }
+
+    public static void wants_spotify(Context context, boolean wants) {
+        SharedPreferences.Editor editor =
+            PlaybackService.getSettings(context).edit();
+        editor.putBoolean(PrefKeys.WANTS_SPOTIFY, wants);
+        editor.commit();
+    }
+
     public void add_to_blacklist(long id) {
         rec.add_to_blacklist(id);
+    }
+
+    public static class SpotifyTask extends AsyncTask<Void, String, Void> {
+        ProgressDialog dialog;
+        Context c;
+        NaviListener navi;
+
+        public SpotifyTask(Context c, NaviListener navi) {
+            super();
+            this.dialog = new ProgressDialog(c);
+            this.c = c;
+            this.navi = navi;
+            dialog.setTitle("Getting Spotify songs");
+            dialog.setCancelable(false);
+            dialog.show();
+        }
+
+        @Override
+        protected Void doInBackground(Void... v) {
+            Log.d(C.TAG, "doing SpotifyTask");
+            try {
+                SyncAdapter.getSpotifySongs(this.c);
+                Moody.getInstance(this.c, new InitProgressListener() {
+                    public void update(String s) {
+                        publishProgress(s);
+                    }
+                }).refresh_candidates();
+                navi.hey_listen();
+            } catch (IOException e) {
+                Log.e(C.TAG, "couldn't get spotify songs", e);
+            }
+            Log.d(C.TAG, "finished SpotifyTask");
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void v) {
+            dialog.dismiss();
+        }
+
+        @Override
+        protected void onProgressUpdate(String... s) {
+            dialog.setMessage(s[0]);
+        }
     }
 
     public static class InitTask extends AsyncTask<Void, String, Void> {
@@ -446,5 +527,9 @@ public class Moody {
 
     interface InitProgressListener {
         void update(String foo);
+    }
+
+    public interface NaviListener {
+        void hey_listen();
     }
 }
