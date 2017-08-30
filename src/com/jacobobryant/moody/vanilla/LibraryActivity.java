@@ -335,32 +335,41 @@ public class LibraryActivity
                 AuthenticationRequest request = builder.build();
                 AuthenticationClient.openLoginActivity(this, 666, request);
             } else if (!Moody.already_asked_about_spotify(this)) {
-                Log.d(C.TAG, "doing that alert thang");
-                AlertDialog.Builder builder = new AlertDialog.Builder(this);
-                builder.setMessage("Do you have a Spotify premium account?")
-                    .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                AlertDialog.Builder b = new AlertDialog.Builder(this);
+                b.setMessage("This is an early prototype. If you like the app, shoot me an email at foo@jacobobryant.com. Thanks!")
+                    .setPositiveButton("OK", new DialogInterface.OnClickListener() {
                         public void onClick(DialogInterface dialog, int id) {
-                            Moody.set_already_asked(LibraryActivity.this);
-                            Moody.wants_spotify(LibraryActivity.this, true);
-                            Log.d(C.TAG, "getting spotify token");
-                            AuthenticationRequest.Builder builder =
-                                new AuthenticationRequest.Builder(C.CLIENT_ID,
-                                        AuthenticationResponse.Type.TOKEN, C.REDIRECT_URI);
-                            builder.setScopes(new String[]{"user-read-private", "streaming",
-                                "user-top-read"});
-                            AuthenticationRequest request = builder.build();
-                            AuthenticationClient.openLoginActivity(LibraryActivity.this, 666, request);
+                            Log.d(C.TAG, "doing that alert thang");
+                            AlertDialog.Builder builder = new AlertDialog.Builder(LibraryActivity.this);
+                            builder.setMessage("Do you have a Spotify premium account?")
+                                .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                                    public void onClick(DialogInterface dialog, int id) {
+                                        Moody.set_already_asked(LibraryActivity.this);
+                                        Moody.wants_spotify(LibraryActivity.this, true);
+                                        Log.d(C.TAG, "getting spotify token");
+                                        AuthenticationRequest.Builder builder =
+                                            new AuthenticationRequest.Builder(C.CLIENT_ID,
+                                                    AuthenticationResponse.Type.TOKEN, C.REDIRECT_URI);
+                                        builder.setScopes(new String[]{"user-read-private", "streaming",
+                                            "user-top-read"});
+                                        AuthenticationRequest request = builder.build();
+                                        AuthenticationClient.openLoginActivity(LibraryActivity.this, 666, request);
+                                    }
+                                })
+                            .setNegativeButton("No", new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int id) {
+                                    Moody.set_already_asked(LibraryActivity.this);
+                                    Moody.wants_spotify(LibraryActivity.this, false);
+                                    new Moody.InitTask(LibraryActivity.this).execute();
+                                }
+                            });
+                            AlertDialog d = builder.create();
+                            d.show();
                         }
-                    })
-                .setNegativeButton("No", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int id) {
-                        Moody.set_already_asked(LibraryActivity.this);
-                        Moody.wants_spotify(LibraryActivity.this, false);
-                        new Moody.InitTask(LibraryActivity.this).execute();
-                    }
-                });
-                AlertDialog dialog = builder.create();
-                dialog.show();
+                    });
+                AlertDialog d = b.create();
+                d.show();
+
             } else {
                 Log.d(C.TAG, "spotify token is still valid");
                 new Moody.InitTask(this).execute();
